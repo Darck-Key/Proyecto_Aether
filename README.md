@@ -4,3 +4,5 @@ Simulador de misión lunar Aether desarrollado para INF272 utilizando Java, Orek
 <p align="center">
   <img src="assets/Mision.jpeg" width="300"/>
 </p>
+
+<br>
