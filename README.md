@@ -19,7 +19,8 @@ Simulador de misión lunar Aether desarrollado para INF272 utilizando Java, Orek
 </h2>
 <hr>
 
-<p>
+<p align = "center">
+  Simulador de la misión Artemis II desarrollado en Java utilizando Orekit y JavaFX. El proyecto recrea el viaje de la nave desde la Tierra hasta la Luna y su regreso, mostrando la trayectoria y datos de la misión en tiempo real. Además, aplica el ciclo completo de desarrollo de software, incluyendo análisis, diseño, pruebas y trabajo colaborativo.
 </p>
 
 <h2 align = "center">
