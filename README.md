@@ -27,6 +27,7 @@ Simulador de misión lunar Aether desarrollado para INF272 utilizando Java, Orek
 Registro de riesgos
 </h2>
 <br>
+  <hr>
 <table>
   <tr>
 <td> Riesgo </td>
