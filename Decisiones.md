@@ -2,15 +2,13 @@
     Registro de decisiones del proyecto
 </h2>
 
-<hora>
-
 <h3>
     Uso de la inteligencia artificial
 </h3>
 
-<pag>
+<p>
     En este apartado se detallara como se integraron las herramientas de inteligencia artificial en nuestro proyecto.
-</pag>
+</p>
 
 <br>
 
@@ -18,21 +16,22 @@
     Partes Asistidas por IA
 </h3>
 
-<pag>
+<p>
     La inteligencia artificial fue utilizada como copiloto de desarrollo y redacción en las siguientes áreas:
-</pag>
+</p>
 
-<pag>
-        - Explicaciones de diversas partes del documento SRS: La IA nos asistió explicando partes o apartados del documento los cuales no estaban dentro de nuestros conocimientos.
-</pag>
+<p>
+        <strong>- Explicaciones de diversas partes del documento SRS:</strong> La IA nos asistió explicando partes o apartados del documento los cuales no estaban dentro de nuestros conocimientos.
+</p>
+<br>
 
-<pag>
-        - Optimización y revisión de códigos: La IA nos ayudo con algunos problemas de optimización y con la revicion del codigo, gracias a eso nos ahorro mucho tiempo.
-</pag>
-
-<pag>
-        - Redacción y documentación: en diversos contextos la IA fue utilizada para darle un mejor formato y claridad a lo que queríamos expresar.
-</pag>
+<p>
+        <strong>- Optimización y revisión de códigos:</strong> La IA nos ayudo con algunos problemas de optimización y con la revicion del codigo, gracias a eso nos ahorro mucho tiempo.
+</p>
+<br>
+<p>
+        <strong>- Redacción y documentación:</strong> en diversos contextos la IA fue utilizada para darle un mejor formato y claridad a lo que queríamos expresar.
+</p>
 
 <br>
 
@@ -40,21 +39,24 @@
     Refinamientos requeridos
 </h3>
 
-<pag>
+<p>
     Si bien, la IA nos proporcionó una base sólida, realizaron las siguientes intervenciones humanas criticas:
-</pag>
+</p>
+<br>
 
-<pag>
-        Los códigos fueron revisados por el equipo de desarrollo antes de ser utilizado, evitando que este no se alineara con lo establecido.
-</pag>
+<p>
+        - Los códigos fueron revisados por el equipo de desarrollo antes de ser utilizado, evitando que este no se alineara con lo establecido.
+</p>
+<br>
 
-<pag>
-        La documentación fue leída y corregida, evitando redundancias y tecnicismos muy complejos.
-</pag>
+<p>
+        - La documentación fue leída y corregida, evitando redundancias y tecnicismos muy complejos.
+</p>
+<br>
 
-<pag>
-        Corrección de bibliotecas que pudieran estar obsoletas o que presentaban algún peligro para la seguridad de nuestro programa y equipos.
-</pag>
+<p>
+       - Corrección de bibliotecas que pudieran estar obsoletas o que presentaban algún peligro para la seguridad de nuestro programa y equipos.
+</p>
 
 <br>
 
@@ -62,11 +64,11 @@
     Herramientas utilizadas
 </h3>
 
-<pag> -ChatGpt </pag>
-<pag> -Gemini </pag>
-<pag> -Codex </pag>
+<p> - ChatGpt </p><br>
+<p> - Gemini </p><br>
+<p> - Codex </p><br>
+<br>
 
-
-<pag>
+<p>
     La inteligencia artificial fue utilizada como una herramienta de apoyo durante el desarrollo del proyecto. Todas las decisiones finales, validaciones técnicas y aprobaciones fueron realizadas por los integrantes del equipo, garantizando la calidad y confiabilidad de los resultados obtenidos.
-</pag>
+</p>
