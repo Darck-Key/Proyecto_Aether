@@ -22,19 +22,17 @@
     La inteligencia artificial fue utilizada como copiloto de desarrollo y redacción en las siguientes áreas:
 </pag>
 
-<lista>
-    <item>
-        Explicaciones de diversas partes del documento SRS: La IA nos asistió explicando partes o apartados del documento los cuales no estaban dentro de nuestros conocimientos.
-    </item>
+<pag>
+        - Explicaciones de diversas partes del documento SRS: La IA nos asistió explicando partes o apartados del documento los cuales no estaban dentro de nuestros conocimientos.
+</pag>
 
-    <item>
-        Optimización y revisión de códigos: La IA nos ayudo con algunos problemas de optimización y con la revicion del codigo, gracias a eso nos ahorro mucho tiempo.
-    </item>
+<pag>
+        - Optimización y revisión de códigos: La IA nos ayudo con algunos problemas de optimización y con la revicion del codigo, gracias a eso nos ahorro mucho tiempo.
+</pag>
 
-    <item>
-        Redacción y documentación: en diversos contextos la IA fue utilizada para darle un mejor formato y claridad a lo que queríamos expresar.
-    </item>
-</lista>
+<pag>
+        - Redacción y documentación: en diversos contextos la IA fue utilizada para darle un mejor formato y claridad a lo que queríamos expresar.
+</pag>
 
 <br>
 
@@ -46,19 +44,17 @@
     Si bien, la IA nos proporcionó una base sólida, realizaron las siguientes intervenciones humanas criticas:
 </pag>
 
-<lista>
-    <item>
+<pag>
         Los códigos fueron revisados por el equipo de desarrollo antes de ser utilizado, evitando que este no se alineara con lo establecido.
-    </item>
+</pag>
 
-    <item>
+<pag>
         La documentación fue leída y corregida, evitando redundancias y tecnicismos muy complejos.
-    </item>
+</pag>
 
-    <item>
+<pag>
         Corrección de bibliotecas que pudieran estar obsoletas o que presentaban algún peligro para la seguridad de nuestro programa y equipos.
-    </item>
-</lista>
+</pag>
 
 <br>
 
@@ -66,11 +62,10 @@
     Herramientas utilizadas
 </h3>
 
-<lista>
-    <item>ChatGpt</item>
-    <item>Gemini</item>
-    <item>Codex</item>
-</lista>
+<pag> -ChatGpt </pag>
+<pag> -Gemini </pag>
+<pag> -Codex </pag>
+
 
 <pag>
     La inteligencia artificial fue utilizada como una herramienta de apoyo durante el desarrollo del proyecto. Todas las decisiones finales, validaciones técnicas y aprobaciones fueron realizadas por los integrantes del equipo, garantizando la calidad y confiabilidad de los resultados obtenidos.
