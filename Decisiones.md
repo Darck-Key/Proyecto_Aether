@@ -61,13 +61,12 @@
 <br>
 
 <h3>
-    Herramientas utilizadas
+    Herramientas utilizadas:
 </h3>
 
-<p> - ChatGpt </p><br>
-<p> - Gemini </p><br>
-<p> - Codex </p><br>
-<br>
+<p> ChatGpt</p><br>
+<p> Gemini</p><br>
+<p> Codex</p><br>
 
 <p>
     La inteligencia artificial fue utilizada como una herramienta de apoyo durante el desarrollo del proyecto. Todas las decisiones finales, validaciones técnicas y aprobaciones fueron realizadas por los integrantes del equipo, garantizando la calidad y confiabilidad de los resultados obtenidos.
