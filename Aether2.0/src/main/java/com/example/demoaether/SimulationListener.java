@@ -6,7 +6,7 @@ package com.example.demoaether;
 public interface SimulationListener {
 
     /**
-     * Avisa que MissionSimulator inicio el ciclo de propagacion.
+     * Avisa que MissionSimulator inicio el precalculo de la trayectoria.
      */
     void onSimulationStarted();
 

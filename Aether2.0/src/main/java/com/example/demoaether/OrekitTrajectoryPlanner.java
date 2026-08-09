@@ -3,6 +3,7 @@ package com.example.demoaether;
 import org.hipparchus.geometry.euclidean.threed.Vector3D;
 import org.hipparchus.ode.events.Action;
 import org.hipparchus.ode.nonstiff.DormandPrince853Integrator;
+import org.orekit.attitudes.LofOffset;
 import org.orekit.bodies.CelestialBody;
 import org.orekit.bodies.CelestialBodyFactory;
 import org.orekit.bodies.OneAxisEllipsoid;
@@ -13,7 +14,9 @@ import org.orekit.forces.gravity.potential.NormalizedSphericalHarmonicsProvider;
 import org.orekit.forces.maneuvers.ImpulseManeuver;
 import org.orekit.frames.Frame;
 import org.orekit.frames.FramesFactory;
+import org.orekit.frames.LOFType;
 import org.orekit.orbits.Orbit;
+import org.orekit.orbits.OrbitType;
 import org.orekit.propagation.SpacecraftState;
 import org.orekit.propagation.events.AltitudeDetector;
 import org.orekit.propagation.events.DateDetector;
@@ -27,6 +30,7 @@ import org.orekit.utils.PVCoordinates;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.stream.Collectors;
 
 /**
  * Motor de precalculo orbital basado en Orekit.
@@ -80,9 +84,36 @@ public class OrekitTrajectoryPlanner {
         return new MissionTrajectory(states, events, true);
     }
 
+    /**
+     * Devuelve los nombres de los modelos de fuerza configurados para pruebas E5.
+     *
+     * @param config parametros orbitales de entrada
+     * @return nombres simples de los ForceModel usados por el propagador
+     */
+    public static List<String> describeForceModels(MissionConfig config) {
+        OrekitInitializer.initialize();
+        NumericalPropagator propagator = createPropagator(OrbitFactory.createInitialOrbit(config), config);
+        return propagator.getAllForceModels().stream()
+                .map(model -> model.getClass().getSimpleName())
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Expone el umbral de reentrada OAM-7 para pruebas automatizadas y documentacion del E5.
+     *
+     * Quien lo llama:
+     * - OrekitTrajectoryPlannerTest valida que la interfaz de reentrada se mantenga en 120 km.
+     *
+     * A quien llama:
+     * - No llama a servicios externos; solo convierte la constante interna de metros a kilometros.
+     */
+    public static double reentryInterfaceAltitudeKm() {
+        return REENTRY_ALTITUDE_M / 1000.0;
+    }
+
     private static NumericalPropagator createPropagator(Orbit initialOrbit, MissionConfig config) {
         // Configura el propagador fisico: integrador numerico, masa de nave, fuerzas y maniobra TLI.
-        double[][] tolerances = NumericalPropagator.tolerances(10.0, initialOrbit, initialOrbit.getType());
+        double[][] tolerances = NumericalPropagator.tolerances(10.0, initialOrbit, OrbitType.CARTESIAN);
         DormandPrince853Integrator integrator = new DormandPrince853Integrator(
                 0.001,
                 600.0,
@@ -92,6 +123,9 @@ public class OrekitTrajectoryPlanner {
         integrator.setInitialStepSize(30.0);
 
         NumericalPropagator propagator = new NumericalPropagator(integrator);
+        // La TLI puede producir energia positiva temporal. CARTESIAN admite ese
+        // tramo, mientras la representacion equinoccial rechaza orbitas hiperbolicas.
+        propagator.setOrbitType(OrbitType.CARTESIAN);
         propagator.setInitialState(new SpacecraftState(initialOrbit, config.getSpacecraftMass()));
 
         // OAM-3: gravedad terrestre por armonicos esfericos 8x8.
@@ -102,11 +136,13 @@ public class OrekitTrajectoryPlanner {
         propagator.addForceModel(new ThirdBodyAttraction(CelestialBodyFactory.getMoon()));
         propagator.addForceModel(new ThirdBodyAttraction(CelestialBodyFactory.getSun()));
 
-        // OAM-4: maniobra TLI impulsiva. Orekit 12 nombra esta clase ImpulseManeuver.
+        // OAM-4: expresa la TLI en TNW para que X apunte en direccion prograda.
+        // MissionSimulator usa este propagador solo para perfiles personalizados.
         AbsoluteDate burnDate = initialOrbit.getDate().shiftedBy(config.getTliBurnOffsetHours() * 3600.0);
         DateDetector burnTrigger = new DateDetector(burnDate);
         Vector3D deltaV = new Vector3D(config.getTliDeltaVKms() * 1000.0, 0.0, 0.0);
-        propagator.addEventDetector(new ImpulseManeuver(burnTrigger, deltaV, 320.0));
+        LofOffset progradeFrame = new LofOffset(initialOrbit.getFrame(), LOFType.TNW);
+        propagator.addEventDetector(new ImpulseManeuver(burnTrigger, progradeFrame, deltaV, 320.0));
 
         return propagator;
     }
@@ -133,7 +169,8 @@ public class OrekitTrajectoryPlanner {
         double elapsedSeconds = state.getDate().durationFrom(start);
         double distanceEarthKm = pv.getPosition().getNorm() / 1000.0;
         double altitudeKm = distanceEarthKm - Constants.WGS84_EARTH_EQUATORIAL_RADIUS / 1000.0;
-        double distanceMoonKm = distanceToMoonKm(pv, frame, state.getDate());
+        Vector3D moonPosition = moonPosition(frame, state.getDate());
+        double distanceMoonKm = Vector3D.distance(pv.getPosition(), moonPosition) / 1000.0;
         return new MissionState(
                 elapsedSeconds,
                 pv.getPosition().getX() / 1000.0,
@@ -142,15 +179,17 @@ public class OrekitTrajectoryPlanner {
                 pv.getVelocity().getNorm() / 1000.0,
                 distanceEarthKm,
                 distanceMoonKm,
-                altitudeKm
+                altitudeKm,
+                moonPosition.getX() / 1000.0,
+                moonPosition.getY() / 1000.0,
+                moonPosition.getZ() / 1000.0
         );
     }
 
-    private static double distanceToMoonKm(PVCoordinates spacecraftPv, Frame frame, AbsoluteDate date) {
-        // Calcula distancia nave-Luna consultando la posicion lunar en el mismo frame.
+    private static Vector3D moonPosition(Frame frame, AbsoluteDate date) {
+        // Entrega la Luna en el mismo frame para que telemetria y mapa compartan geometria.
         CelestialBody moon = CelestialBodyFactory.getMoon();
-        Vector3D moonPosition = moon.getPVCoordinates(date, frame).getPosition();
-        return Vector3D.distance(spacecraftPv.getPosition(), moonPosition) / 1000.0;
+        return moon.getPVCoordinates(date, frame).getPosition();
     }
 
     private static void addLunarPeriapsisEvent(List<MissionState> states, List<String> events) {

@@ -30,15 +30,15 @@ public class MissionConfig {
         spacecraftName = "Orion";
         spacecraftMass = 26000;
         initialAltitude = 185;
-        initialVelocity = 10.8;
+        initialVelocity = 7.8;
         inclination = 28.5;
         eccentricity = 0.0;
         argumentOfPerigee = 0.0;
         tliDeltaVKms = 3.2;
-        tliBurnOffsetHours = 1.5;
-        simulationHours = 10;
+        tliBurnOffsetHours = 23.5;
+        simulationHours = 240;
         simulationStepSeconds = 60;
-        simulationSpeed = 60;
+        simulationSpeed = 1000;
         saveReports = true;
     }
 

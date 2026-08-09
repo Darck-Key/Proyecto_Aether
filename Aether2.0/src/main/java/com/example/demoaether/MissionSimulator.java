@@ -18,12 +18,12 @@ import org.orekit.utils.PVCoordinates;
  * Motor de simulacion de la mision.
  *
  * Quien llama:
- * - HelloController.startSimulation() crea esta clase y la ejecuta en un hilo aparte.
+ * - HelloController.startSimulation() crea esta clase y llama prepareTrajectory() en un hilo aparte.
  * - HelloController.calculateOrbit() usa calculateInitialState() para un calculo rapido.
  *
  * A quien llama:
- * - OrekitInitializer prepara datos de Orekit.
- * - OrekitTrajectoryPlanner intenta crear la trayectoria fisica.
+ * - ArtemisReferenceTrajectoryLoader lee el OEM nominal.
+ * - OrekitTrajectoryPlanner calcula perfiles personalizados.
  * - MissionLogger escribe CSV.
  * - SimulationListener notifica a la interfaz cada cambio de estado.
  */
@@ -92,20 +92,72 @@ public class MissionSimulator {
         paused = !paused;
     }
 
+    /** Sincroniza la pausa del motor con TrajectoryPlayback. */
+    public void setPaused(boolean paused) {
+        this.paused = paused;
+    }
+
     /**
-     * Calcula un estado inicial usando Orekit con fallback visual si algo falla.
+     * Calcula el primer estado de la misma trayectoria que usara la simulacion.
      *
      * @param config parametros de mision
      * @return primer estado orbital disponible
      */
     public static MissionState calculateInitialState(MissionConfig config) {
-        // Calcula el primer estado con Orekit; si falla, usa un estado inicial simple para no romper la UI.
-        try {
-            OrekitInitializer.initialize();
-            MissionTrajectory trajectory = OrekitTrajectoryPlanner.precompute(config);
-            return trajectory.getStates().isEmpty() ? fallbackInitialState(config) : trajectory.getStates().get(0);
-        } catch (RuntimeException exception) {
-            return fallbackInitialState(config);
+        MissionTrajectory trajectory = buildTrajectory(config);
+        if (trajectory.getStates().isEmpty()) {
+            throw new IllegalStateException("La trayectoria calculada no contiene estados.");
+        }
+        return trajectory.getStates().get(0);
+    }
+
+    /**
+     * Precalcula y registra la trayectoria fuera del hilo JavaFX.
+     *
+     * <p>Quien llama: HelloController.startSimulation(). A quien llama:
+     * ArtemisReferenceTrajectoryLoader para el perfil nominal o
+     * OrekitTrajectoryPlanner para entradas personalizadas.</p>
+     */
+    public MissionTrajectory prepareTrajectory() {
+        running = true;
+        paused = false;
+        if (listener != null) {
+            listener.onSimulationStarted();
+        }
+        MissionTrajectory trajectory = buildTrajectorySafely();
+        writeTrajectoryLog(trajectory);
+        return trajectory;
+    }
+
+    /** Entrega al listener un estado interpolado por TrajectoryPlayback. */
+    public void publishState(MissionState state) {
+        if (!running || state == null) {
+            return;
+        }
+        currentState = state;
+        if (listener != null) {
+            listener.onStateUpdated(state);
+        }
+    }
+
+    /** Cierra una corrida completa una sola vez y notifica al controlador. */
+    public void completeSimulation() {
+        if (!running) {
+            return;
+        }
+        running = false;
+        paused = false;
+        if (listener != null) {
+            listener.onSimulationFinished();
+        }
+    }
+
+    /** Convierte una falla de precalculo/reproduccion en el callback comun de UI. */
+    public void failSimulation(Exception exception) {
+        running = false;
+        paused = false;
+        if (listener != null) {
+            listener.onSimulationError(exception);
         }
     }
 
@@ -116,21 +168,12 @@ public class MissionSimulator {
      * emite MissionState al listener y registra CSV con MissionLogger.</p>
      */
     public void startSimulation() {
-        // Bucle principal de animacion: recorre MissionTrajectory, escribe CSV y notifica al listener.
-        running = true;
-        paused = false;
-
+        // Compatibilidad para pruebas sin JavaFX. La interfaz usa TrajectoryPlayback.
         try {
-            logger = new MissionLogger("mission-data.csv");
-            if (listener != null) {
-                listener.onSimulationStarted();
-            }
-
-            MissionTrajectory trajectory = buildTrajectorySafely();
-            int step = config.getSimulationStepSeconds();
-            long delayMillis = Math.max(80L, Math.round((step * 1000.0) / Math.max(1, config.getSimulationSpeed())));
-
-            for (MissionState state : trajectory.getStates()) {
+            MissionTrajectory trajectory = prepareTrajectory();
+            java.util.List<MissionState> states = trajectory.getStates();
+            for (int index = 0; index < states.size(); index++) {
+                MissionState state = states.get(index);
                 while (paused && running) {
                     Thread.sleep(200);
                 }
@@ -138,33 +181,17 @@ public class MissionSimulator {
                     break;
                 }
 
-                currentState = state;
-
-                if (logger != null) {
-                    logger.logState(currentState);
+                publishState(state);
+                if (index < states.size() - 1) {
+                    double deltaSeconds = states.get(index + 1).getElapsedTime() - state.getElapsedTime();
+                    Thread.sleep(calculateVisualDelayMillis(deltaSeconds, config.getSimulationSpeed()));
                 }
-                if (listener != null) {
-                    listener.onStateUpdated(currentState);
-                }
-
-                Thread.sleep(delayMillis);
             }
-
-            if (logger != null) {
-                logger.close();
-            }
-            running = false;
-            if (listener != null) {
-                listener.onSimulationFinished();
+            if (running) {
+                completeSimulation();
             }
         } catch (Exception e) {
-            running = false;
-            if (logger != null) {
-                logger.close();
-            }
-            if (listener != null) {
-                listener.onSimulationError(e);
-            }
+            failSimulation(e);
         }
     }
 
@@ -175,6 +202,41 @@ public class MissionSimulator {
         // Bandera usada por el bucle principal para terminar sin forzar el hilo.
         running = false;
         paused = false;
+    }
+
+    private long calculateVisualDelayMillis(double stepSeconds, int speed) {
+        // Solo respalda pruebas sin JavaFX; la UI usa tiempo continuo en TrajectoryPlayback.
+        int safeSpeed = Math.max(1, speed);
+        double physicalDelay = (stepSeconds * 1000.0) / safeSpeed;
+        return Math.max(1L, Math.min(250L, Math.round(physicalDelay)));
+    }
+
+    private void writeTrajectoryLog(MissionTrajectory trajectory) {
+        // MissionLogger recibe los puntos fuente una sola vez; no duplica los frames interpolados.
+        logger = new MissionLogger("mission-data.csv");
+        try {
+            for (MissionState state : trajectory.getStates()) {
+                logger.logState(state);
+            }
+        } finally {
+            logger.close();
+            logger = null;
+        }
+    }
+
+    private MissionState copyWithElapsedTime(MissionState state, double elapsedTime) {
+        // Crea un estado final exacto para que la UI no siga contando despues de la duracion configurada.
+        // Lo llama startSimulation() cuando el ultimo MissionState llega o supera el final de mision.
+        return new MissionState(
+                elapsedTime,
+                state.getX(),
+                state.getY(),
+                state.getZ(),
+                state.getVelocity(),
+                state.getDistanceEarth(),
+                state.getDistanceMoon(),
+                state.getAltitude()
+        );
     }
 
     private static MissionState fallbackInitialState(MissionConfig config) {
@@ -194,12 +256,35 @@ public class MissionSimulator {
     }
 
     private MissionTrajectory buildTrajectorySafely() {
-        // Ruta preferida: OrekitTrajectoryPlanner. Ruta alternativa: trayectoria visual local.
-        try {
-            return OrekitTrajectoryPlanner.precompute(config);
-        } catch (RuntimeException exception) {
-            return createFallbackTrajectory(exception);
+        return buildTrajectory(config);
+    }
+
+    private static MissionTrajectory buildTrajectory(MissionConfig config) {
+        // La escala 1x-1000x queda fuera de esta decision para no cambiar la ruta.
+        config.validate();
+        if (ArtemisReferenceTrajectoryLoader.supports(config)) {
+            return ArtemisReferenceTrajectoryLoader.load();
         }
+        return OrekitTrajectoryPlanner.precompute(config);
+    }
+
+    private boolean usesPresentationTrajectory() {
+        // LEGACY, no invocado: la demo actual usa TrajectoryPlayback sobre la ruta real.
+        return false;
+    }
+
+    private MissionTrajectory createDemoFlybyTrajectory() {
+        // LEGACY, no invocado: se conserva por compatibilidad de lectura del proyecto.
+        int endSecond = config.getSimulationHours() * 3600;
+        int step = Math.max(1, config.getSimulationStepSeconds());
+        java.util.List<MissionState> states = new java.util.ArrayList<>();
+        java.util.List<String> events = new java.util.ArrayList<>();
+        events.add("Demo rapida: trayectoria visual de sobrevuelo lunar completa");
+        states.add(stateFromConfig(0));
+        for (int second = step; second <= endSecond; second += step) {
+            states.add(stateFromMissionProgress(second, endSecond));
+        }
+        return new MissionTrajectory(states, events, false);
     }
 
     private static MissionState stateFromSpacecraftState(SpacecraftState state, int elapsedSeconds) {
@@ -264,12 +349,12 @@ public class MissionSimulator {
     }
 
     private MissionTrajectory createFallbackTrajectory(RuntimeException exception) {
-        // Trayectoria de respaldo cuando la propagacion real falla; conserva avance, fases y reporte.
+        // LEGACY, no invocado: una falla fisica ahora se muestra como error y no como ruta ficticia.
         int endSecond = config.getSimulationHours() * 3600;
         int step = Math.max(1, config.getSimulationStepSeconds());
         java.util.List<MissionState> states = new java.util.ArrayList<>();
         java.util.List<String> events = new java.util.ArrayList<>();
-        events.add("Fallback visual activado: " + exception.getMessage());
+        events.add("Fallback visual activado: " + safeExceptionSummary(exception));
         states.add(stateFromConfig(0));
         for (int second = step; second <= endSecond; second += step) {
             states.add(stateFromMissionProgress(second, endSecond));
@@ -277,12 +362,47 @@ public class MissionSimulator {
         return new MissionTrajectory(states, events, false);
     }
 
+    private String safeExceptionSummary(Throwable exception) {
+        // Orekit puede fallar al construir mensajes localizados dentro de modulos Java.
+        // Esta lectura evita exception.getMessage() y resume el tipo/causa sin disparar ResourceBundle.Control.
+        if (exception == null) {
+            return "error desconocido";
+        }
+        Throwable cause = exception.getCause();
+        if (cause == null || cause == exception) {
+            return exception.getClass().getSimpleName();
+        }
+        return exception.getClass().getSimpleName() + " causado por " + cause.getClass().getSimpleName();
+    }
+
     private MissionState stateFromMissionProgress(int elapsedSeconds, int endSecond) {
-        // Modelo visual simple de ida a la Luna y regreso para que el mapa siga animandose.
+        // Modelo visual simple de ida a la Luna, sobrevuelo y regreso para la demo/fallback.
         double progress = Math.min(1.0, Math.max(0.0, elapsedSeconds / (double) Math.max(1, endSecond)));
-        double outbound = smoothStep(Math.min(1.0, progress / 0.58));
-        double returnLeg = progress <= 0.58 ? 0.0 : smoothStep((progress - 0.58) / 0.42);
-        double lunarApproach = progress <= 0.58 ? outbound : 1.0 - returnLeg;
+        double lunarApproach;
+        double visualX;
+        double visualY;
+        double visualZ;
+
+        if (progress < 0.48) {
+            double u = smoothStep(progress / 0.48);
+            lunarApproach = u;
+            visualX = -205 + u * 455;
+            visualY = -18 - Math.sin(u * Math.PI) * 78;
+            visualZ = Math.sin(u * Math.PI) * 42;
+        } else if (progress < 0.64) {
+            double u = (progress - 0.48) / 0.16;
+            double angle = Math.toRadians(-155 + 305 * u);
+            lunarApproach = 1.0;
+            visualX = 275 + Math.cos(angle) * 58;
+            visualY = -18 + Math.sin(angle) * 54;
+            visualZ = -18 + Math.sin(angle * 0.7) * 28;
+        } else {
+            double u = smoothStep((progress - 0.64) / 0.36);
+            lunarApproach = 1.0 - u;
+            visualX = 235 - u * 440;
+            visualY = 28 + Math.sin(u * Math.PI) * 72;
+            visualZ = 22 - Math.sin(u * Math.PI) * 38;
+        }
 
         double distanceEarth = EARTH_RADIUS_KM + config.getInitialAltitude()
                 + lunarApproach * (MOON_DISTANCE_KM - EARTH_RADIUS_KM - config.getInitialAltitude() - 6500);
@@ -291,13 +411,12 @@ public class MissionSimulator {
         double velocity = config.getInitialVelocity()
                 + Math.sin(progress * Math.PI * 2.0) * 0.55
                 - Math.max(0, progress - 0.7) * 1.2;
-        double angle = progress * Math.PI * 1.7;
 
         return new MissionState(
                 elapsedSeconds,
-                Math.cos(angle) * distanceEarth,
-                Math.sin(angle) * distanceEarth,
-                Math.sin(progress * Math.PI) * 35000,
+                visualX,
+                visualY,
+                visualZ,
                 Math.max(0.8, velocity),
                 distanceEarth,
                 distanceMoon,

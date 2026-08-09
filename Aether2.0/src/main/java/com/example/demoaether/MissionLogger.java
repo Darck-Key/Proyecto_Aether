@@ -9,7 +9,7 @@ import java.io.PrintWriter;
  * Exportador CSV de telemetria.
  *
  * Quien llama:
- * - MissionSimulator.startSimulation() crea MissionLogger y llama logState() por cada estado.
+ * - MissionSimulator.prepareTrajectory() crea MissionLogger y llama logState() por cada estado fuente.
  *
  * Que hace:
  * - Escribe mission-data.csv con tiempo, posicion, velocidad, distancia a Tierra/Luna y altitud.
