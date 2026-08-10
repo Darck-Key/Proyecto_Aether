@@ -1,0 +1,204 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="es"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>TrajectoryPlayback.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">AETHER Mission Control Simulator</a> &gt; <a href="index.source.html" class="el_package">com.example.demoaether</a> &gt; <span class="el_source">TrajectoryPlayback.java</span></div><h1>TrajectoryPlayback.java</h1><pre class="source lang-java linenums">package com.example.demoaether;
+
+import javafx.animation.AnimationTimer;
+
+import java.util.List;
+import java.util.function.Consumer;
+
+/**
+ * Reloj visual que reproduce una MissionTrajectory sin recalcular su fisica.
+ *
+ * &lt;p&gt;Quien lo llama: HelloController despues de que MissionSimulator termina
+ * el precalculo en segundo plano. A quien llama: entrega un MissionState
+ * interpolado al controlador en cada pulso de JavaFX y ejecuta onFinished al
+ * alcanzar exactamente el ultimo estado.&lt;/p&gt;
+ */
+public final class TrajectoryPlayback extends AnimationTimer {
+
+    /** Duracion de pared de la demo; la trayectoria y telemetria no cambian. */
+    public static final double QUICK_DEMO_SECONDS = 32.0;
+
+    private final List&lt;MissionState&gt; states;
+    private final double trajectoryDurationSeconds;
+    private final double playbackRate;
+    private final boolean quickDemo;
+    private final Consumer&lt;MissionState&gt; stateConsumer;
+    private final Runnable onFinished;
+
+<span class="nc" id="L28">    private long startNanos = -1L;</span>
+<span class="nc" id="L29">    private long pauseStartedNanos = -1L;</span>
+    private long pausedNanos;
+    private boolean running;
+    private boolean paused;
+    private boolean firstStateSent;
+
+    /**
+     * @param trajectory estados orbitales inmutables ya calculados
+     * @param playbackRate escala real de reproduccion, entre 1x y 1000x
+     * @param quickDemo true para recorrer la misma trayectoria en 32 segundos
+     * @param stateConsumer receptor de telemetria, normalmente MissionSimulator.publishState
+     * @param onFinished cierre invocado una sola vez al llegar al ultimo estado
+     */
+    public TrajectoryPlayback(
+            MissionTrajectory trajectory,
+            double playbackRate,
+            boolean quickDemo,
+            Consumer&lt;MissionState&gt; stateConsumer,
+<span class="nc" id="L47">            Runnable onFinished) {</span>
+<span class="nc" id="L48">        this.states = trajectory.getStates();</span>
+<span class="nc bnc" id="L49" title="All 2 branches missed.">        if (states.isEmpty()) {</span>
+<span class="nc" id="L50">            throw new IllegalArgumentException(&quot;La trayectoria no contiene estados para reproducir.&quot;);</span>
+        }
+<span class="nc" id="L52">        this.trajectoryDurationSeconds = states.get(states.size() - 1).getElapsedTime();</span>
+<span class="nc" id="L53">        this.playbackRate = Math.max(1.0, Math.min(1000.0, playbackRate));</span>
+<span class="nc" id="L54">        this.quickDemo = quickDemo;</span>
+<span class="nc" id="L55">        this.stateConsumer = stateConsumer;</span>
+<span class="nc" id="L56">        this.onFinished = onFinished;</span>
+<span class="nc" id="L57">    }</span>
+
+    @Override
+    public void start() {
+<span class="nc" id="L61">        startNanos = -1L;</span>
+<span class="nc" id="L62">        pauseStartedNanos = -1L;</span>
+<span class="nc" id="L63">        pausedNanos = 0L;</span>
+<span class="nc" id="L64">        paused = false;</span>
+<span class="nc" id="L65">        running = true;</span>
+<span class="nc" id="L66">        firstStateSent = false;</span>
+<span class="nc" id="L67">        super.start();</span>
+<span class="nc" id="L68">    }</span>
+
+    @Override
+    public void handle(long now) {
+<span class="nc bnc" id="L72" title="All 4 branches missed.">        if (!running || paused) {</span>
+<span class="nc" id="L73">            return;</span>
+        }
+<span class="nc bnc" id="L75" title="All 2 branches missed.">        if (startNanos &lt; 0L) {</span>
+<span class="nc" id="L76">            startNanos = now;</span>
+        }
+<span class="nc bnc" id="L78" title="All 2 branches missed.">        if (!firstStateSent) {</span>
+<span class="nc" id="L79">            stateConsumer.accept(states.get(0));</span>
+<span class="nc" id="L80">            firstStateSent = true;</span>
+        }
+
+<span class="nc" id="L83">        double wallSeconds = Math.max(0.0, (now - startNanos - pausedNanos) / 1_000_000_000.0);</span>
+<span class="nc bnc" id="L84" title="All 2 branches missed.">        double simulatedSeconds = quickDemo</span>
+<span class="nc" id="L85">                ? wallSeconds * trajectoryDurationSeconds / QUICK_DEMO_SECONDS</span>
+<span class="nc" id="L86">                : wallSeconds * playbackRate;</span>
+<span class="nc" id="L87">        simulatedSeconds = Math.min(trajectoryDurationSeconds, simulatedSeconds);</span>
+<span class="nc" id="L88">        stateConsumer.accept(sampleAt(states, simulatedSeconds));</span>
+
+<span class="nc bnc" id="L90" title="All 2 branches missed.">        if (simulatedSeconds &gt;= trajectoryDurationSeconds) {</span>
+<span class="nc" id="L91">            finish();</span>
+        }
+<span class="nc" id="L93">    }</span>
+
+    /** Alterna la pausa manteniendo el mismo instante orbital al reanudar. */
+    public boolean togglePaused() {
+<span class="nc bnc" id="L97" title="All 2 branches missed.">        if (!running) {</span>
+<span class="nc" id="L98">            return false;</span>
+        }
+<span class="nc" id="L100">        long now = System.nanoTime();</span>
+<span class="nc bnc" id="L101" title="All 2 branches missed.">        if (paused) {</span>
+<span class="nc" id="L102">            pausedNanos += Math.max(0L, now - pauseStartedNanos);</span>
+<span class="nc" id="L103">            pauseStartedNanos = -1L;</span>
+<span class="nc" id="L104">            paused = false;</span>
+        } else {
+<span class="nc" id="L106">            pauseStartedNanos = now;</span>
+<span class="nc" id="L107">            paused = true;</span>
+        }
+<span class="nc" id="L109">        return paused;</span>
+    }
+
+    /** Cancela la reproduccion sin emitir el evento de mision completada. */
+    public void cancel() {
+<span class="nc" id="L114">        running = false;</span>
+<span class="nc" id="L115">        paused = false;</span>
+<span class="nc" id="L116">        super.stop();</span>
+<span class="nc" id="L117">    }</span>
+
+    public boolean isRunning() {
+<span class="nc" id="L120">        return running;</span>
+    }
+
+    public boolean isPaused() {
+<span class="nc" id="L124">        return paused;</span>
+    }
+
+    public double getTrajectoryDurationSeconds() {
+<span class="nc" id="L128">        return trajectoryDurationSeconds;</span>
+    }
+
+    private void finish() {
+<span class="nc bnc" id="L132" title="All 2 branches missed.">        if (!running) {</span>
+<span class="nc" id="L133">            return;</span>
+        }
+<span class="nc" id="L135">        running = false;</span>
+<span class="nc" id="L136">        paused = false;</span>
+<span class="nc" id="L137">        super.stop();</span>
+<span class="nc" id="L138">        stateConsumer.accept(states.get(states.size() - 1));</span>
+<span class="nc" id="L139">        onFinished.run();</span>
+<span class="nc" id="L140">    }</span>
+
+    /**
+     * Interpola entre los dos estados que rodean el tiempo solicitado.
+     * Es package-private para que las pruebas E5 validen continuidad y limites.
+     */
+    static MissionState sampleAt(List&lt;MissionState&gt; states, double elapsedSeconds) {
+<span class="pc bpc" id="L147" title="2 of 4 branches missed.">        if (states == null || states.isEmpty()) {</span>
+<span class="nc" id="L148">            throw new IllegalArgumentException(&quot;Se requiere al menos un estado.&quot;);</span>
+        }
+<span class="fc bfc" id="L150" title="All 2 branches covered.">        if (elapsedSeconds &lt;= states.get(0).getElapsedTime()) {</span>
+<span class="fc" id="L151">            return states.get(0);</span>
+        }
+<span class="fc" id="L153">        int lastIndex = states.size() - 1;</span>
+<span class="fc bfc" id="L154" title="All 2 branches covered.">        if (elapsedSeconds &gt;= states.get(lastIndex).getElapsedTime()) {</span>
+<span class="fc" id="L155">            return states.get(lastIndex);</span>
+        }
+
+<span class="fc" id="L158">        int low = 0;</span>
+<span class="fc" id="L159">        int high = lastIndex;</span>
+<span class="pc bpc" id="L160" title="1 of 2 branches missed.">        while (low + 1 &lt; high) {</span>
+<span class="nc" id="L161">            int middle = (low + high) &gt;&gt;&gt; 1;</span>
+<span class="nc bnc" id="L162" title="All 2 branches missed.">            if (states.get(middle).getElapsedTime() &lt;= elapsedSeconds) {</span>
+<span class="nc" id="L163">                low = middle;</span>
+            } else {
+<span class="nc" id="L165">                high = middle;</span>
+            }
+<span class="nc" id="L167">        }</span>
+
+<span class="fc" id="L169">        MissionState from = states.get(low);</span>
+<span class="fc" id="L170">        MissionState to = states.get(high);</span>
+<span class="fc" id="L171">        double span = Math.max(1.0e-9, to.getElapsedTime() - from.getElapsedTime());</span>
+<span class="fc" id="L172">        double ratio = (elapsedSeconds - from.getElapsedTime()) / span;</span>
+<span class="fc" id="L173">        return interpolate(from, to, ratio, elapsedSeconds);</span>
+    }
+
+    private static MissionState interpolate(
+            MissionState from,
+            MissionState to,
+            double ratio,
+            double elapsedSeconds) {
+<span class="fc" id="L181">        return new MissionState(</span>
+                elapsedSeconds,
+<span class="fc" id="L183">                lerp(from.getX(), to.getX(), ratio),</span>
+<span class="fc" id="L184">                lerp(from.getY(), to.getY(), ratio),</span>
+<span class="fc" id="L185">                lerp(from.getZ(), to.getZ(), ratio),</span>
+<span class="fc" id="L186">                lerp(from.getVelocity(), to.getVelocity(), ratio),</span>
+<span class="fc" id="L187">                lerp(from.getDistanceEarth(), to.getDistanceEarth(), ratio),</span>
+<span class="fc" id="L188">                lerp(from.getDistanceMoon(), to.getDistanceMoon(), ratio),</span>
+<span class="fc" id="L189">                lerp(from.getAltitude(), to.getAltitude(), ratio),</span>
+<span class="fc" id="L190">                lerpOptional(from.getMoonX(), to.getMoonX(), ratio),</span>
+<span class="fc" id="L191">                lerpOptional(from.getMoonY(), to.getMoonY(), ratio),</span>
+<span class="fc" id="L192">                lerpOptional(from.getMoonZ(), to.getMoonZ(), ratio)</span>
+        );
+    }
+
+    private static double lerp(double from, double to, double ratio) {
+<span class="fc" id="L197">        return from + (to - from) * ratio;</span>
+    }
+
+    private static double lerpOptional(double from, double to, double ratio) {
+<span class="pc bpc" id="L201" title="2 of 4 branches missed.">        return Double.isFinite(from) &amp;&amp; Double.isFinite(to) ? lerp(from, to, ratio) : Double.NaN;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

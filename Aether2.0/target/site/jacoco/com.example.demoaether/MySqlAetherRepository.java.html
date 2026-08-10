@@ -1,0 +1,354 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="es"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MySqlAetherRepository.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">AETHER Mission Control Simulator</a> &gt; <a href="index.source.html" class="el_package">com.example.demoaether</a> &gt; <span class="el_source">MySqlAetherRepository.java</span></div><h1>MySqlAetherRepository.java</h1><pre class="source lang-java linenums">package com.example.demoaether;
+
+import java.io.File;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+/**
+ * Persistencia real en MySQL.
+ *
+ * Flujo de llamadas:
+ * 1. RepositoryFactory crea esta clase si AETHER_DB_ENABLED=true.
+ * 2. initializeSchema crea las tablas si no existen.
+ * 3. HelloController llama saveCalculation/saveMissionEvent/saveReport segun la accion del usuario.
+ */
+public class MySqlAetherRepository implements AetherRepository {
+
+    private final DatabaseConfig config;
+
+<span class="nc" id="L28">    public MySqlAetherRepository(DatabaseConfig config) {</span>
+        // Constructor llamado por RepositoryFactory; prepara driver y esquema antes de usar el repositorio.
+<span class="nc" id="L30">        this.config = config;</span>
+<span class="nc" id="L31">        loadDriverIfPresent();</span>
+<span class="nc" id="L32">        initializeSchema();</span>
+<span class="nc" id="L33">    }</span>
+
+    @Override
+    public void saveCalculation(MissionConfig missionConfig, MissionState state, LocalDateTime executedAt) {
+        // Guarda la telemetria calculada para que Historial y ReportGenerator la puedan consultar.
+<span class="nc" id="L38">        String sql = &quot;INSERT INTO orbital_calculations &quot; +</span>
+                &quot;(mission_name, spacecraft_name, altitude_km, velocity_kms, inclination_deg, eccentricity, &quot; +
+                &quot;argument_of_perigee_deg, elapsed_seconds, x_km, y_km, z_km, distance_earth_km, &quot; +
+                &quot;distance_moon_km, calculated_altitude_km, executed_at) &quot; +
+                &quot;VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)&quot;;
+
+<span class="nc" id="L44">        try (Connection connection = openConnection(); PreparedStatement statement = connection.prepareStatement(sql)) {</span>
+<span class="nc" id="L45">            statement.setString(1, missionConfig.getMissionName());</span>
+<span class="nc" id="L46">            statement.setString(2, missionConfig.getSpacecraftName());</span>
+<span class="nc" id="L47">            statement.setDouble(3, missionConfig.getInitialAltitude());</span>
+<span class="nc" id="L48">            statement.setDouble(4, missionConfig.getInitialVelocity());</span>
+<span class="nc" id="L49">            statement.setDouble(5, missionConfig.getInclination());</span>
+<span class="nc" id="L50">            statement.setDouble(6, missionConfig.getEccentricity());</span>
+<span class="nc" id="L51">            statement.setDouble(7, missionConfig.getArgumentOfPerigee());</span>
+<span class="nc" id="L52">            statement.setDouble(8, state.getElapsedTime());</span>
+<span class="nc" id="L53">            statement.setDouble(9, state.getX());</span>
+<span class="nc" id="L54">            statement.setDouble(10, state.getY());</span>
+<span class="nc" id="L55">            statement.setDouble(11, state.getZ());</span>
+<span class="nc" id="L56">            statement.setDouble(12, state.getDistanceEarth());</span>
+<span class="nc" id="L57">            statement.setDouble(13, state.getDistanceMoon());</span>
+<span class="nc" id="L58">            statement.setDouble(14, state.getAltitude());</span>
+<span class="nc" id="L59">            statement.setTimestamp(15, Timestamp.valueOf(executedAt));</span>
+<span class="nc" id="L60">            statement.executeUpdate();</span>
+<span class="nc" id="L61">        } catch (SQLException exception) {</span>
+<span class="nc" id="L62">            System.err.println(&quot;No se pudo guardar el calculo orbital en MySQL: &quot; + exception.getMessage());</span>
+<span class="nc" id="L63">        }</span>
+<span class="nc" id="L64">    }</span>
+
+    @Override
+    public void saveMissionEvent(String eventType, String description, LocalDateTime executedAt) {
+        // Guarda eventos operativos: login, inicio, error, completado, calculo orbital, etc.
+<span class="nc" id="L69">        String sql = &quot;INSERT INTO mission_events (event_type, description, executed_at) VALUES (?, ?, ?)&quot;;</span>
+
+<span class="nc" id="L71">        try (Connection connection = openConnection(); PreparedStatement statement = connection.prepareStatement(sql)) {</span>
+<span class="nc" id="L72">            statement.setString(1, eventType);</span>
+<span class="nc bnc" id="L73" title="All 2 branches missed.">            statement.setString(2, description == null ? &quot;&quot; : description);</span>
+<span class="nc" id="L74">            statement.setTimestamp(3, Timestamp.valueOf(executedAt));</span>
+<span class="nc" id="L75">            statement.executeUpdate();</span>
+<span class="nc" id="L76">        } catch (SQLException exception) {</span>
+<span class="nc" id="L77">            System.err.println(&quot;No se pudo guardar el evento en MySQL: &quot; + exception.getMessage());</span>
+<span class="nc" id="L78">        }</span>
+<span class="nc" id="L79">    }</span>
+
+    @Override
+    public void saveReport(File reportFile, MissionConfig missionConfig, MissionState state, LocalDateTime generatedAt) {
+        // Registra el PDF creado por ReportGenerator para abrirlo despues desde Reportes guardados.
+<span class="nc" id="L84">        String sql = &quot;INSERT INTO mission_reports (file_name, file_path, mission_name, generated_at) VALUES (?, ?, ?, ?)&quot;;</span>
+
+<span class="nc" id="L86">        try (Connection connection = openConnection(); PreparedStatement statement = connection.prepareStatement(sql)) {</span>
+<span class="nc" id="L87">            statement.setString(1, reportFile.getName());</span>
+<span class="nc" id="L88">            statement.setString(2, reportFile.getAbsolutePath());</span>
+<span class="nc" id="L89">            statement.setString(3, missionConfig.getMissionName());</span>
+<span class="nc" id="L90">            statement.setTimestamp(4, Timestamp.valueOf(generatedAt));</span>
+<span class="nc" id="L91">            statement.executeUpdate();</span>
+<span class="nc" id="L92">        } catch (SQLException exception) {</span>
+<span class="nc" id="L93">            System.err.println(&quot;No se pudo guardar el reporte en MySQL: &quot; + exception.getMessage());</span>
+<span class="nc" id="L94">        }</span>
+<span class="nc" id="L95">    }</span>
+
+    @Override
+    public List&lt;CalculationHistoryEntry&gt; findRecentCalculations(int limit) {
+        // Consulta los ultimos calculos para la tabla Historial y para anexarlos al PDF.
+<span class="nc" id="L100">        String sql = &quot;SELECT id, mission_name, spacecraft_name, elapsed_seconds, velocity_kms, &quot; +</span>
+                &quot;calculated_altitude_km, distance_moon_km, executed_at &quot; +
+                &quot;FROM orbital_calculations ORDER BY executed_at DESC, id DESC LIMIT ?&quot;;
+
+<span class="nc" id="L104">        try (Connection connection = openConnection(); PreparedStatement statement = connection.prepareStatement(sql)) {</span>
+<span class="nc" id="L105">            statement.setInt(1, Math.max(1, limit));</span>
+<span class="nc" id="L106">            try (ResultSet resultSet = statement.executeQuery()) {</span>
+<span class="nc" id="L107">                List&lt;CalculationHistoryEntry&gt; entries = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L108" title="All 2 branches missed.">                while (resultSet.next()) {</span>
+<span class="nc" id="L109">                    Timestamp executedAt = resultSet.getTimestamp(&quot;executed_at&quot;);</span>
+<span class="nc" id="L110">                    entries.add(new CalculationHistoryEntry(</span>
+<span class="nc" id="L111">                            resultSet.getLong(&quot;id&quot;),</span>
+<span class="nc" id="L112">                            resultSet.getString(&quot;mission_name&quot;),</span>
+<span class="nc" id="L113">                            resultSet.getString(&quot;spacecraft_name&quot;),</span>
+<span class="nc" id="L114">                            resultSet.getDouble(&quot;elapsed_seconds&quot;),</span>
+<span class="nc" id="L115">                            resultSet.getDouble(&quot;velocity_kms&quot;),</span>
+<span class="nc" id="L116">                            resultSet.getDouble(&quot;calculated_altitude_km&quot;),</span>
+<span class="nc" id="L117">                            resultSet.getDouble(&quot;distance_moon_km&quot;),</span>
+<span class="nc bnc" id="L118" title="All 2 branches missed.">                            executedAt == null ? null : executedAt.toLocalDateTime()</span>
+                    ));
+<span class="nc" id="L120">                }</span>
+<span class="nc" id="L121">                return entries;</span>
+            }
+<span class="nc" id="L123">        } catch (SQLException exception) {</span>
+<span class="nc" id="L124">            System.err.println(&quot;No se pudo leer el historial orbital en MySQL: &quot; + exception.getMessage());</span>
+<span class="nc" id="L125">            return Collections.emptyList();</span>
+        }
+    }
+
+    @Override
+    public List&lt;MissionEventEntry&gt; findRecentEvents(int limit) {
+        // Consulta eventos recientes para el panel inferior de la interfaz.
+<span class="nc" id="L132">        String sql = &quot;SELECT id, event_type, description, executed_at &quot; +</span>
+                &quot;FROM mission_events ORDER BY executed_at DESC, id DESC LIMIT ?&quot;;
+
+<span class="nc" id="L135">        try (Connection connection = openConnection(); PreparedStatement statement = connection.prepareStatement(sql)) {</span>
+<span class="nc" id="L136">            statement.setInt(1, Math.max(1, limit));</span>
+<span class="nc" id="L137">            try (ResultSet resultSet = statement.executeQuery()) {</span>
+<span class="nc" id="L138">                List&lt;MissionEventEntry&gt; entries = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L139" title="All 2 branches missed.">                while (resultSet.next()) {</span>
+<span class="nc" id="L140">                    Timestamp executedAt = resultSet.getTimestamp(&quot;executed_at&quot;);</span>
+<span class="nc" id="L141">                    entries.add(new MissionEventEntry(</span>
+<span class="nc" id="L142">                            resultSet.getLong(&quot;id&quot;),</span>
+<span class="nc" id="L143">                            resultSet.getString(&quot;event_type&quot;),</span>
+<span class="nc" id="L144">                            resultSet.getString(&quot;description&quot;),</span>
+<span class="nc bnc" id="L145" title="All 2 branches missed.">                            executedAt == null ? null : executedAt.toLocalDateTime()</span>
+                    ));
+<span class="nc" id="L147">                }</span>
+<span class="nc" id="L148">                return entries;</span>
+            }
+<span class="nc" id="L150">        } catch (SQLException exception) {</span>
+<span class="nc" id="L151">            System.err.println(&quot;No se pudieron leer los eventos en MySQL: &quot; + exception.getMessage());</span>
+<span class="nc" id="L152">            return Collections.emptyList();</span>
+        }
+    }
+
+    @Override
+    public List&lt;MissionReportEntry&gt; findRecentReports(int limit) {
+        // Consulta PDFs guardados para la ventana Reportes guardados.
+<span class="nc" id="L159">        String sql = &quot;SELECT id, file_name, file_path, mission_name, generated_at &quot; +</span>
+                &quot;FROM mission_reports ORDER BY generated_at DESC, id DESC LIMIT ?&quot;;
+
+<span class="nc" id="L162">        try (Connection connection = openConnection(); PreparedStatement statement = connection.prepareStatement(sql)) {</span>
+<span class="nc" id="L163">            statement.setInt(1, Math.max(1, limit));</span>
+<span class="nc" id="L164">            try (ResultSet resultSet = statement.executeQuery()) {</span>
+<span class="nc" id="L165">                List&lt;MissionReportEntry&gt; entries = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L166" title="All 2 branches missed.">                while (resultSet.next()) {</span>
+<span class="nc" id="L167">                    Timestamp generatedAt = resultSet.getTimestamp(&quot;generated_at&quot;);</span>
+<span class="nc" id="L168">                    entries.add(new MissionReportEntry(</span>
+<span class="nc" id="L169">                            resultSet.getLong(&quot;id&quot;),</span>
+<span class="nc" id="L170">                            resultSet.getString(&quot;file_name&quot;),</span>
+<span class="nc" id="L171">                            resultSet.getString(&quot;file_path&quot;),</span>
+<span class="nc" id="L172">                            resultSet.getString(&quot;mission_name&quot;),</span>
+<span class="nc bnc" id="L173" title="All 2 branches missed.">                            generatedAt == null ? null : generatedAt.toLocalDateTime()</span>
+                    ));
+<span class="nc" id="L175">                }</span>
+<span class="nc" id="L176">                return entries;</span>
+            }
+<span class="nc" id="L178">        } catch (SQLException exception) {</span>
+<span class="nc" id="L179">            System.err.println(&quot;No se pudieron leer los reportes en MySQL: &quot; + exception.getMessage());</span>
+<span class="nc" id="L180">            return Collections.emptyList();</span>
+        }
+    }
+
+    @Override
+    public void saveMissionConfig(MissionConfig missionConfig, LocalDateTime savedAt) {
+        // Persiste los parametros de Opciones para restaurarlos en el siguiente arranque.
+<span class="nc" id="L187">        String sql = &quot;INSERT INTO mission_configs &quot; +</span>
+                &quot;(mission_name, spacecraft_name, spacecraft_mass, initial_altitude_km, initial_velocity_kms, &quot; +
+                &quot;inclination_deg, eccentricity, argument_of_perigee_deg, tli_delta_v_kms, tli_burn_offset_hours, simulation_hours, &quot; +
+                &quot;simulation_step_seconds, simulation_speed, save_reports, saved_at) &quot; +
+                &quot;VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)&quot;;
+
+<span class="nc" id="L193">        try (Connection connection = openConnection(); PreparedStatement statement = connection.prepareStatement(sql)) {</span>
+<span class="nc" id="L194">            statement.setString(1, missionConfig.getMissionName());</span>
+<span class="nc" id="L195">            statement.setString(2, missionConfig.getSpacecraftName());</span>
+<span class="nc" id="L196">            statement.setDouble(3, missionConfig.getSpacecraftMass());</span>
+<span class="nc" id="L197">            statement.setDouble(4, missionConfig.getInitialAltitude());</span>
+<span class="nc" id="L198">            statement.setDouble(5, missionConfig.getInitialVelocity());</span>
+<span class="nc" id="L199">            statement.setDouble(6, missionConfig.getInclination());</span>
+<span class="nc" id="L200">            statement.setDouble(7, missionConfig.getEccentricity());</span>
+<span class="nc" id="L201">            statement.setDouble(8, missionConfig.getArgumentOfPerigee());</span>
+<span class="nc" id="L202">            statement.setDouble(9, missionConfig.getTliDeltaVKms());</span>
+<span class="nc" id="L203">            statement.setDouble(10, missionConfig.getTliBurnOffsetHours());</span>
+<span class="nc" id="L204">            statement.setInt(11, missionConfig.getSimulationHours());</span>
+<span class="nc" id="L205">            statement.setInt(12, missionConfig.getSimulationStepSeconds());</span>
+<span class="nc" id="L206">            statement.setInt(13, missionConfig.getSimulationSpeed());</span>
+<span class="nc" id="L207">            statement.setBoolean(14, missionConfig.isSaveReports());</span>
+<span class="nc" id="L208">            statement.setTimestamp(15, Timestamp.valueOf(savedAt));</span>
+<span class="nc" id="L209">            statement.executeUpdate();</span>
+<span class="nc" id="L210">        } catch (SQLException exception) {</span>
+<span class="nc" id="L211">            System.err.println(&quot;No se pudo guardar la configuracion en MySQL: &quot; + exception.getMessage());</span>
+<span class="nc" id="L212">        }</span>
+<span class="nc" id="L213">    }</span>
+
+    @Override
+    public MissionConfig loadLastMissionConfig() {
+        // Recupera la ultima configuracion usada; si no existe, HelloController crea MissionConfig por defecto.
+<span class="nc" id="L218">        String sql = &quot;SELECT mission_name, spacecraft_name, spacecraft_mass, initial_altitude_km, &quot; +</span>
+                &quot;initial_velocity_kms, inclination_deg, eccentricity, argument_of_perigee_deg, &quot; +
+                &quot;tli_delta_v_kms, tli_burn_offset_hours, simulation_hours, simulation_step_seconds, simulation_speed, save_reports &quot; +
+                &quot;FROM mission_configs ORDER BY saved_at DESC, id DESC LIMIT 1&quot;;
+
+<span class="nc" id="L223">        try (Connection connection = openConnection();</span>
+<span class="nc" id="L224">             PreparedStatement statement = connection.prepareStatement(sql);</span>
+<span class="nc" id="L225">             ResultSet resultSet = statement.executeQuery()) {</span>
+<span class="nc bnc" id="L226" title="All 2 branches missed.">            if (!resultSet.next()) {</span>
+<span class="nc" id="L227">                return null;</span>
+            }
+
+<span class="nc" id="L230">            MissionConfig missionConfig = new MissionConfig();</span>
+<span class="nc" id="L231">            missionConfig.setMissionName(resultSet.getString(&quot;mission_name&quot;));</span>
+<span class="nc" id="L232">            missionConfig.setSpacecraftName(resultSet.getString(&quot;spacecraft_name&quot;));</span>
+<span class="nc" id="L233">            missionConfig.setSpacecraftMass(resultSet.getDouble(&quot;spacecraft_mass&quot;));</span>
+<span class="nc" id="L234">            missionConfig.setInitialAltitude(resultSet.getDouble(&quot;initial_altitude_km&quot;));</span>
+<span class="nc" id="L235">            missionConfig.setInitialVelocity(resultSet.getDouble(&quot;initial_velocity_kms&quot;));</span>
+<span class="nc" id="L236">            missionConfig.setInclination(resultSet.getDouble(&quot;inclination_deg&quot;));</span>
+<span class="nc" id="L237">            missionConfig.setEccentricity(resultSet.getDouble(&quot;eccentricity&quot;));</span>
+<span class="nc" id="L238">            missionConfig.setArgumentOfPerigee(resultSet.getDouble(&quot;argument_of_perigee_deg&quot;));</span>
+<span class="nc" id="L239">            missionConfig.setTliDeltaVKms(resultSet.getDouble(&quot;tli_delta_v_kms&quot;));</span>
+<span class="nc" id="L240">            missionConfig.setTliBurnOffsetHours(resultSet.getDouble(&quot;tli_burn_offset_hours&quot;));</span>
+<span class="nc" id="L241">            missionConfig.setSimulationHours(resultSet.getInt(&quot;simulation_hours&quot;));</span>
+<span class="nc" id="L242">            missionConfig.setSimulationStepSeconds(resultSet.getInt(&quot;simulation_step_seconds&quot;));</span>
+<span class="nc" id="L243">            missionConfig.setSimulationSpeed(resultSet.getInt(&quot;simulation_speed&quot;));</span>
+<span class="nc" id="L244">            missionConfig.setSaveReports(resultSet.getBoolean(&quot;save_reports&quot;));</span>
+<span class="nc" id="L245">            return missionConfig;</span>
+<span class="nc bnc" id="L246" title="All 6 branches missed.">        } catch (SQLException exception) {</span>
+<span class="nc" id="L247">            System.err.println(&quot;No se pudo cargar la configuracion desde MySQL: &quot; + exception.getMessage());</span>
+<span class="nc" id="L248">            return null;</span>
+        }
+    }
+
+    @Override
+    public boolean isAvailable() {
+        // Prueba rapida de conexion usada por RepositoryFactory para decidir si se mantiene MySQL.
+<span class="nc" id="L255">        try (Connection ignored = openConnection()) {</span>
+<span class="nc" id="L256">            return true;</span>
+<span class="nc" id="L257">        } catch (SQLException exception) {</span>
+<span class="nc" id="L258">            return false;</span>
+        }
+    }
+
+    @Override
+    public String describeStatus() {
+<span class="nc bnc" id="L264" title="All 2 branches missed.">        return isAvailable() ? &quot;MySQL: conectado&quot; : &quot;MySQL: sin conexion&quot;;</span>
+    }
+
+    private void initializeSchema() {
+        // Crea tablas y columnas necesarias sin borrar datos existentes.
+<span class="nc" id="L269">        try (Connection connection = openConnection(); Statement statement = connection.createStatement()) {</span>
+<span class="nc" id="L270">            statement.executeUpdate(&quot;CREATE TABLE IF NOT EXISTS orbital_calculations (&quot; +</span>
+                    &quot;id BIGINT PRIMARY KEY AUTO_INCREMENT,&quot; +
+                    &quot;mission_name VARCHAR(120) NOT NULL,&quot; +
+                    &quot;spacecraft_name VARCHAR(120) NOT NULL,&quot; +
+                    &quot;altitude_km DOUBLE NOT NULL,&quot; +
+                    &quot;velocity_kms DOUBLE NOT NULL,&quot; +
+                    &quot;inclination_deg DOUBLE NOT NULL,&quot; +
+                    &quot;eccentricity DOUBLE NOT NULL,&quot; +
+                    &quot;argument_of_perigee_deg DOUBLE NOT NULL,&quot; +
+                    &quot;elapsed_seconds DOUBLE NOT NULL,&quot; +
+                    &quot;x_km DOUBLE NOT NULL,&quot; +
+                    &quot;y_km DOUBLE NOT NULL,&quot; +
+                    &quot;z_km DOUBLE NOT NULL,&quot; +
+                    &quot;distance_earth_km DOUBLE NOT NULL,&quot; +
+                    &quot;distance_moon_km DOUBLE NOT NULL,&quot; +
+                    &quot;calculated_altitude_km DOUBLE NOT NULL,&quot; +
+                    &quot;executed_at DATETIME NOT NULL&quot; +
+                    &quot;)&quot;);
+
+<span class="nc" id="L289">            statement.executeUpdate(&quot;CREATE TABLE IF NOT EXISTS mission_events (&quot; +</span>
+                    &quot;id BIGINT PRIMARY KEY AUTO_INCREMENT,&quot; +
+                    &quot;event_type VARCHAR(80) NOT NULL,&quot; +
+                    &quot;description TEXT,&quot; +
+                    &quot;executed_at DATETIME NOT NULL&quot; +
+                    &quot;)&quot;);
+
+<span class="nc" id="L296">            statement.executeUpdate(&quot;CREATE TABLE IF NOT EXISTS mission_reports (&quot; +</span>
+                    &quot;id BIGINT PRIMARY KEY AUTO_INCREMENT,&quot; +
+                    &quot;file_name VARCHAR(255) NOT NULL,&quot; +
+                    &quot;file_path TEXT NOT NULL,&quot; +
+                    &quot;mission_name VARCHAR(120) NOT NULL,&quot; +
+                    &quot;generated_at DATETIME NOT NULL&quot; +
+                    &quot;)&quot;);
+
+<span class="nc" id="L304">            statement.executeUpdate(&quot;CREATE TABLE IF NOT EXISTS mission_configs (&quot; +</span>
+                    &quot;id BIGINT PRIMARY KEY AUTO_INCREMENT,&quot; +
+                    &quot;mission_name VARCHAR(120) NOT NULL,&quot; +
+                    &quot;spacecraft_name VARCHAR(120) NOT NULL,&quot; +
+                    &quot;spacecraft_mass DOUBLE NOT NULL,&quot; +
+                    &quot;initial_altitude_km DOUBLE NOT NULL,&quot; +
+                    &quot;initial_velocity_kms DOUBLE NOT NULL,&quot; +
+                    &quot;inclination_deg DOUBLE NOT NULL,&quot; +
+                    &quot;eccentricity DOUBLE NOT NULL,&quot; +
+                    &quot;argument_of_perigee_deg DOUBLE NOT NULL,&quot; +
+                    &quot;tli_delta_v_kms DOUBLE NOT NULL DEFAULT 3.2,&quot; +
+                    &quot;tli_burn_offset_hours DOUBLE NOT NULL DEFAULT 1.5,&quot; +
+                    &quot;simulation_hours INT NOT NULL,&quot; +
+                    &quot;simulation_step_seconds INT NOT NULL,&quot; +
+                    &quot;simulation_speed INT NOT NULL,&quot; +
+                    &quot;save_reports BOOLEAN NOT NULL,&quot; +
+                    &quot;saved_at DATETIME NOT NULL&quot; +
+                    &quot;)&quot;);
+<span class="nc" id="L322">            addColumnIfMissing(statement, &quot;mission_configs&quot;, &quot;tli_delta_v_kms&quot;, &quot;DOUBLE NOT NULL DEFAULT 3.2&quot;);</span>
+<span class="nc" id="L323">            addColumnIfMissing(statement, &quot;mission_configs&quot;, &quot;tli_burn_offset_hours&quot;, &quot;DOUBLE NOT NULL DEFAULT 1.5&quot;);</span>
+<span class="nc" id="L324">        } catch (SQLException exception) {</span>
+<span class="nc" id="L325">            throw new IllegalStateException(&quot;No se pudo inicializar el esquema MySQL&quot;, exception);</span>
+<span class="nc" id="L326">        }</span>
+<span class="nc" id="L327">    }</span>
+
+    private void addColumnIfMissing(Statement statement, String table, String column, String definition) throws SQLException {
+        // Migracion ligera: agrega columnas nuevas si la base fue creada con una version anterior.
+        try {
+<span class="nc" id="L332">            statement.executeUpdate(&quot;ALTER TABLE &quot; + table + &quot; ADD COLUMN &quot; + column + &quot; &quot; + definition);</span>
+<span class="nc" id="L333">        } catch (SQLException exception) {</span>
+<span class="nc bnc" id="L334" title="All 2 branches missed.">            if (!&quot;42S21&quot;.equals(exception.getSQLState())) {</span>
+<span class="nc" id="L335">                throw exception;</span>
+            }
+<span class="nc" id="L337">        }</span>
+<span class="nc" id="L338">    }</span>
+
+    private Connection openConnection() throws SQLException {
+        // Punto unico de conexion JDBC hacia MySQL.
+<span class="nc" id="L342">        return DriverManager.getConnection(config.getUrl(), config.getUser(), config.getPassword());</span>
+    }
+
+    private void loadDriverIfPresent() {
+        // Carga MySQL Connector/J si esta disponible en el classpath de Gradle/Maven.
+        try {
+<span class="nc" id="L348">            Class.forName(&quot;com.mysql.cj.jdbc.Driver&quot;);</span>
+<span class="nc" id="L349">        } catch (ClassNotFoundException ignored) {</span>
+            // DriverManager tambien puede descubrir el driver si esta en el classpath.
+<span class="nc" id="L351">        }</span>
+<span class="nc" id="L352">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="es"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MissionPresets.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">AETHER Mission Control Simulator</a> &gt; <a href="index.source.html" class="el_package">com.example.demoaether</a> &gt; <span class="el_source">MissionPresets.java</span></div><h1>MissionPresets.java</h1><pre class="source lang-java linenums">package com.example.demoaether;
+
+
+/**
+ * Misiones preconfiguradas.
+ * Contiene valores reales o aproximados
+ * para iniciar simulaciones.
+ */
+<span class="nc" id="L9">public class MissionPresets {</span>
+
+
+    public static MissionConfig createArtemisII() {
+
+
+<span class="nc" id="L15">        MissionConfig config = new MissionConfig();</span>
+
+
+
+        // Datos de la misión
+
+<span class="nc" id="L21">        config.setMissionName(</span>
+                &quot;Artemis II&quot;
+        );
+
+
+<span class="nc" id="L26">        config.setSpacecraftName(</span>
+                &quot;Orion&quot;
+        );
+
+
+
+        // Masa aproximada cápsula Orion
+
+<span class="nc" id="L34">        config.setSpacecraftMass(</span>
+                26000
+        );
+
+
+
+        // Órbita inicial aproximada
+
+<span class="nc" id="L42">        config.setInitialAltitude(</span>
+                300
+        );
+
+
+
+<span class="nc" id="L48">        config.setInitialVelocity(</span>
+                10.8
+        );
+
+
+
+        // Duración de simulación
+
+<span class="nc" id="L56">        config.setSimulationHours(</span>
+                72
+        );
+
+
+
+        // Mostrar cada 3 horas
+
+<span class="nc" id="L64">        config.setSimulationStepSeconds(</span>
+                10800
+        );
+
+
+
+<span class="nc" id="L70">        config.setSimulationSpeed(</span>
+                1
+        );
+
+
+
+<span class="nc" id="L76">        config.setSaveReports(</span>
+                true
+        );
+
+
+
+<span class="nc" id="L82">        return config;</span>
+
+    }
+
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

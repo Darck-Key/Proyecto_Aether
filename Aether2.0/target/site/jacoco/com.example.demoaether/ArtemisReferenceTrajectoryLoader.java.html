@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="es"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ArtemisReferenceTrajectoryLoader.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">AETHER Mission Control Simulator</a> &gt; <a href="index.source.html" class="el_package">com.example.demoaether</a> &gt; <span class="el_source">ArtemisReferenceTrajectoryLoader.java</span></div><h1>ArtemisReferenceTrajectoryLoader.java</h1><pre class="source lang-java linenums">package com.example.demoaether;
+
+import org.hipparchus.geometry.euclidean.threed.Vector3D;
+import org.orekit.bodies.CelestialBody;
+import org.orekit.bodies.CelestialBodyFactory;
+import org.orekit.data.DataSource;
+import org.orekit.files.ccsds.ndm.ParserBuilder;
+import org.orekit.files.ccsds.ndm.odm.oem.Oem;
+import org.orekit.files.ccsds.ndm.odm.oem.OemSegment;
+import org.orekit.frames.Frame;
+import org.orekit.time.AbsoluteDate;
+import org.orekit.utils.Constants;
+import org.orekit.utils.TimeStampedPVCoordinates;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+
+/**
+ * Adapta la efemeride oficial Artemis II al modelo interno de AETHER.
+ *
+ * &lt;p&gt;Quien la llama: MissionSimulator cuando MissionConfig conserva el perfil
+ * Artemis II de referencia. A quien llama: OemParser de Orekit para leer el
+ * archivo CCSDS OEM y CelestialBodyFactory para calcular la posicion lunar.
+ * El resultado contiene los mismos puntos para el mapa, la telemetria, la
+ * reproduccion normal y la demo rapida.&lt;/p&gt;
+ */
+public final class ArtemisReferenceTrajectoryLoader {
+
+    static final String RESOURCE_PATH = &quot;/com/example/demoaether/data/artemis-ii-flight-oem.asc&quot;;
+    private static final double EARTH_RADIUS_M = Constants.WGS84_EARTH_EQUATORIAL_RADIUS;
+    private static volatile MissionTrajectory cachedTrajectory;
+
+    private ArtemisReferenceTrajectoryLoader() {
+    }
+
+    /**
+     * Decide si la configuracion representa el perfil nominal incluido.
+     * La escala de tiempo no participa: cambiar de 1x a 1000x nunca cambia la fisica.
+     */
+    public static boolean supports(MissionConfig config) {
+<span class="fc" id="L44">        return MissionPresets.isArtemisIIReference(config);</span>
+    }
+
+    /**
+     * Lee una sola vez el OEM incluido y devuelve mas de 3,000 estados reales.
+     *
+     * @return trayectoria oficial post-separacion ICPS hasta interfaz de entrada
+     */
+    public static MissionTrajectory load() {
+<span class="fc" id="L53">        MissionTrajectory result = cachedTrajectory;</span>
+<span class="fc bfc" id="L54" title="All 2 branches covered.">        if (result != null) {</span>
+<span class="fc" id="L55">            return result;</span>
+        }
+
+<span class="fc" id="L58">        synchronized (ArtemisReferenceTrajectoryLoader.class) {</span>
+<span class="pc bpc" id="L59" title="1 of 2 branches missed.">            if (cachedTrajectory == null) {</span>
+<span class="fc" id="L60">                cachedTrajectory = parseResource();</span>
+            }
+<span class="fc" id="L62">            return cachedTrajectory;</span>
+        }
+    }
+
+    private static MissionTrajectory parseResource() {
+<span class="fc" id="L67">        OrekitInitializer.initialize();</span>
+<span class="fc" id="L68">        DataSource source = new DataSource(&quot;artemis-ii-flight-oem.asc&quot;, () -&gt; openResource());</span>
+<span class="fc" id="L69">        Oem oem = new ParserBuilder()</span>
+<span class="fc" id="L70">                .withMu(Constants.WGS84_EARTH_MU)</span>
+<span class="fc" id="L71">                .buildOemParser()</span>
+<span class="fc" id="L72">                .parse(source);</span>
+
+<span class="fc" id="L74">        List&lt;MissionState&gt; states = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L75">        AbsoluteDate start = null;</span>
+<span class="fc bfc" id="L76" title="All 2 branches covered.">        for (OemSegment segment : oem.getSegments()) {</span>
+<span class="fc" id="L77">            Frame frame = segment.getFrame();</span>
+<span class="fc bfc" id="L78" title="All 2 branches covered.">            for (TimeStampedPVCoordinates coordinates : segment.getCoordinates()) {</span>
+<span class="fc bfc" id="L79" title="All 2 branches covered.">                if (start == null) {</span>
+<span class="fc" id="L80">                    start = coordinates.getDate();</span>
+                }
+<span class="fc bfc" id="L82" title="All 2 branches covered.">                if (!states.isEmpty()</span>
+<span class="fc" id="L83">                        &amp;&amp; coordinates.getDate().durationFrom(start)</span>
+<span class="pc bpc" id="L84" title="1 of 2 branches missed.">                        &lt;= states.get(states.size() - 1).getElapsedTime()) {</span>
+<span class="nc" id="L85">                    continue;</span>
+                }
+<span class="fc" id="L87">                states.add(toMissionState(coordinates, frame, start));</span>
+<span class="fc" id="L88">            }</span>
+<span class="fc" id="L89">        }</span>
+
+<span class="pc bpc" id="L91" title="1 of 2 branches missed.">        if (states.size() &lt; 500) {</span>
+<span class="nc" id="L92">            throw new IllegalStateException(&quot;La efemeride Artemis II no contiene suficientes estados.&quot;);</span>
+        }
+
+<span class="fc" id="L95">        List&lt;String&gt; events = describeReferenceEvents(states);</span>
+<span class="fc" id="L96">        return new MissionTrajectory(states, events, true);</span>
+    }
+
+    private static InputStream openResource() throws IOException {
+<span class="fc" id="L100">        InputStream stream = ArtemisReferenceTrajectoryLoader.class.getResourceAsStream(RESOURCE_PATH);</span>
+<span class="pc bpc" id="L101" title="1 of 2 branches missed.">        if (stream == null) {</span>
+<span class="nc" id="L102">            throw new IOException(&quot;No se encontro el recurso &quot; + RESOURCE_PATH);</span>
+        }
+<span class="fc" id="L104">        return stream;</span>
+    }
+
+    private static MissionState toMissionState(
+            TimeStampedPVCoordinates spacecraft,
+            Frame frame,
+            AbsoluteDate start) {
+<span class="fc" id="L111">        CelestialBody moon = CelestialBodyFactory.getMoon();</span>
+<span class="fc" id="L112">        Vector3D moonPosition = moon.getPVCoordinates(spacecraft.getDate(), frame).getPosition();</span>
+<span class="fc" id="L113">        Vector3D position = spacecraft.getPosition();</span>
+<span class="fc" id="L114">        double distanceEarthKm = position.getNorm() / 1000.0;</span>
+<span class="fc" id="L115">        double distanceMoonKm = Vector3D.distance(position, moonPosition) / 1000.0;</span>
+
+<span class="fc" id="L117">        return new MissionState(</span>
+<span class="fc" id="L118">                spacecraft.getDate().durationFrom(start),</span>
+<span class="fc" id="L119">                position.getX() / 1000.0,</span>
+<span class="fc" id="L120">                position.getY() / 1000.0,</span>
+<span class="fc" id="L121">                position.getZ() / 1000.0,</span>
+<span class="fc" id="L122">                spacecraft.getVelocity().getNorm() / 1000.0,</span>
+                distanceEarthKm,
+                distanceMoonKm,
+                distanceEarthKm - EARTH_RADIUS_M / 1000.0,
+<span class="fc" id="L126">                moonPosition.getX() / 1000.0,</span>
+<span class="fc" id="L127">                moonPosition.getY() / 1000.0,</span>
+<span class="fc" id="L128">                moonPosition.getZ() / 1000.0</span>
+        );
+    }
+
+    private static List&lt;String&gt; describeReferenceEvents(List&lt;MissionState&gt; states) {
+<span class="fc" id="L133">        MissionState closestMoon = states.get(0);</span>
+<span class="fc" id="L134">        MissionState farthestEarth = states.get(0);</span>
+<span class="fc bfc" id="L135" title="All 2 branches covered.">        for (MissionState state : states) {</span>
+<span class="fc bfc" id="L136" title="All 2 branches covered.">            if (state.getDistanceMoon() &lt; closestMoon.getDistanceMoon()) {</span>
+<span class="fc" id="L137">                closestMoon = state;</span>
+            }
+<span class="fc bfc" id="L139" title="All 2 branches covered.">            if (state.getDistanceEarth() &gt; farthestEarth.getDistanceEarth()) {</span>
+<span class="fc" id="L140">                farthestEarth = state;</span>
+            }
+<span class="fc" id="L142">        }</span>
+
+<span class="fc" id="L144">        MissionState finalState = states.get(states.size() - 1);</span>
+<span class="fc" id="L145">        List&lt;String&gt; events = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L146">        events.add(&quot;Fuente: NASA/JSC/FOD/FDO - OEM post-ICPS hasta entrada&quot;);</span>
+<span class="fc" id="L147">        events.add(String.format(Locale.US,</span>
+                &quot;Maxima distancia terrestre: %.0f km a T+%.0f s&quot;,
+<span class="fc" id="L149">                farthestEarth.getDistanceEarth(), farthestEarth.getElapsedTime()));</span>
+<span class="fc" id="L150">        events.add(String.format(Locale.US,</span>
+                &quot;Periapsis lunar: %.0f km del centro lunar a T+%.0f s&quot;,
+<span class="fc" id="L152">                closestMoon.getDistanceMoon(), closestMoon.getElapsedTime()));</span>
+<span class="fc" id="L153">        events.add(String.format(Locale.US,</span>
+                &quot;Interfaz de entrada: %.0f km de altitud a T+%.0f s&quot;,
+<span class="fc" id="L155">                finalState.getAltitude(), finalState.getElapsedTime()));</span>
+<span class="fc" id="L156">        return events;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>
