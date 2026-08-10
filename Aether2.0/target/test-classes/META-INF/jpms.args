@@ -1,0 +1,4 @@
+--patch-module
+com.example.demoaether=_
+--add-reads
+com.example.demoaether=ALL-UNNAMED

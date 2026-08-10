@@ -1,0 +1,240 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="es"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MissionPhaseTimeline.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">AETHER Mission Control Simulator</a> &gt; <a href="index.source.html" class="el_package">com.example.demoaether</a> &gt; <span class="el_source">MissionPhaseTimeline.java</span></div><h1>MissionPhaseTimeline.java</h1><pre class="source lang-java linenums">package com.example.demoaether;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Identifica los hitos visibles de una trayectoria a partir de su geometria.
+ *
+ * &lt;p&gt;Quien la llama: HelloController para nombrar la fase activa y MissionMap3D
+ * para colorear la ruta. A quien llama: solo consulta los MissionState ya
+ * calculados por Orekit; no modifica la efemeride ni inventa posiciones.&lt;/p&gt;
+ */
+final class MissionPhaseTimeline {
+
+    private static final double TLI_LEAD_SECONDS = 60.0 * 60.0;
+    private static final double TLI_FOLLOW_SECONDS = 2.0 * 60.0 * 60.0;
+    private static final double LUNAR_INFLUENCE_DISTANCE_KM = 70_000.0;
+    private static final double REENTRY_APPROACH_DISTANCE_KM = 100_000.0;
+
+    private final double startSeconds;
+    private final double tliCenterSeconds;
+    private final double tliStartSeconds;
+    private final double tliEndSeconds;
+    private final double lunarEntrySeconds;
+    private final double lunarEncounterSeconds;
+    private final double lunarExitSeconds;
+    private final double reentryStartSeconds;
+    private final double endSeconds;
+
+    private MissionPhaseTimeline(
+            double startSeconds,
+            double tliCenterSeconds,
+            double tliStartSeconds,
+            double tliEndSeconds,
+            double lunarEntrySeconds,
+            double lunarEncounterSeconds,
+            double lunarExitSeconds,
+            double reentryStartSeconds,
+<span class="fc" id="L39">            double endSeconds) {</span>
+<span class="fc" id="L40">        this.startSeconds = startSeconds;</span>
+<span class="fc" id="L41">        this.tliCenterSeconds = tliCenterSeconds;</span>
+<span class="fc" id="L42">        this.tliStartSeconds = tliStartSeconds;</span>
+<span class="fc" id="L43">        this.tliEndSeconds = tliEndSeconds;</span>
+<span class="fc" id="L44">        this.lunarEntrySeconds = lunarEntrySeconds;</span>
+<span class="fc" id="L45">        this.lunarEncounterSeconds = lunarEncounterSeconds;</span>
+<span class="fc" id="L46">        this.lunarExitSeconds = lunarExitSeconds;</span>
+<span class="fc" id="L47">        this.reentryStartSeconds = reentryStartSeconds;</span>
+<span class="fc" id="L48">        this.endSeconds = endSeconds;</span>
+<span class="fc" id="L49">    }</span>
+
+    /** Construye la secuencia buscando perigeo de salida, periapsis lunar y retorno terrestre. */
+    static MissionPhaseTimeline from(MissionTrajectory trajectory) {
+<span class="pc bpc" id="L53" title="2 of 4 branches missed.">        if (trajectory == null || trajectory.getStates().size() &lt; 3) {</span>
+<span class="nc" id="L54">            throw new IllegalArgumentException(&quot;La trayectoria requiere al menos tres estados.&quot;);</span>
+        }
+
+<span class="fc" id="L57">        List&lt;MissionState&gt; states = trajectory.getStates();</span>
+<span class="fc" id="L58">        int encounterIndex = indexOfMinimumMoonDistance(states);</span>
+<span class="fc" id="L59">        int tliIndex = indexOfDeparturePerigee(states, encounterIndex);</span>
+<span class="fc" id="L60">        int lunarEntryIndex = firstWithinMoonDistance(states, 0, encounterIndex);</span>
+<span class="fc" id="L61">        int lunarExitIndex = firstOutsideMoonDistance(states, encounterIndex);</span>
+<span class="fc" id="L62">        int reentryIndex = firstReturnWithinEarthDistance(states, lunarExitIndex);</span>
+
+<span class="fc" id="L64">        double start = states.get(0).getElapsedTime();</span>
+<span class="fc" id="L65">        double tliCenter = states.get(tliIndex).getElapsedTime();</span>
+<span class="fc" id="L66">        double lunarEntry = Math.max(tliCenter, states.get(lunarEntryIndex).getElapsedTime());</span>
+<span class="fc" id="L67">        double encounter = Math.max(lunarEntry, states.get(encounterIndex).getElapsedTime());</span>
+<span class="fc" id="L68">        double lunarExit = Math.max(encounter, states.get(lunarExitIndex).getElapsedTime());</span>
+<span class="fc" id="L69">        double reentry = Math.max(lunarExit, states.get(reentryIndex).getElapsedTime());</span>
+<span class="fc" id="L70">        double end = Math.max(reentry, states.get(states.size() - 1).getElapsedTime());</span>
+
+<span class="fc" id="L72">        double tliStart = Math.max(start, tliCenter - TLI_LEAD_SECONDS);</span>
+<span class="fc" id="L73">        double tliEnd = Math.min(lunarEntry, tliCenter + TLI_FOLLOW_SECONDS);</span>
+<span class="fc" id="L74">        return new MissionPhaseTimeline(</span>
+                start,
+                tliCenter,
+                tliStart,
+                tliEnd,
+                lunarEntry,
+                encounter,
+                lunarExit,
+                reentry,
+                end);
+    }
+
+    /** Devuelve la fase que corresponde al instante real de la efemeride. */
+    Phase phaseAt(double elapsedSeconds) {
+<span class="fc" id="L88">        double elapsed = Math.max(startSeconds, Math.min(endSeconds, elapsedSeconds));</span>
+<span class="fc bfc" id="L89" title="All 2 branches covered.">        if (elapsed &lt; tliStartSeconds) {</span>
+<span class="fc" id="L90">            return Phase.ORBITA_TERRESTRE;</span>
+        }
+<span class="fc bfc" id="L92" title="All 2 branches covered.">        if (elapsed &lt; tliEndSeconds) {</span>
+<span class="fc" id="L93">            return Phase.INYECCION_TRANSLUNAR;</span>
+        }
+<span class="fc bfc" id="L95" title="All 2 branches covered.">        if (elapsed &lt; lunarEntrySeconds) {</span>
+<span class="fc" id="L96">            return Phase.COSTA_TRANSLUNAR;</span>
+        }
+<span class="fc bfc" id="L98" title="All 2 branches covered.">        if (elapsed &lt;= lunarExitSeconds) {</span>
+<span class="fc" id="L99">            return Phase.SOBREVUELO_LUNAR;</span>
+        }
+<span class="fc bfc" id="L101" title="All 2 branches covered.">        if (elapsed &lt; reentryStartSeconds) {</span>
+<span class="fc" id="L102">            return Phase.RETORNO_LIBRE;</span>
+        }
+<span class="fc" id="L104">        return Phase.REINGRESO;</span>
+    }
+
+    /** Hitos usados por MissionMap3D para marcar cambios de fase sin numeros ni texto. */
+    List&lt;Transition&gt; transitions() {
+<span class="fc" id="L109">        List&lt;Transition&gt; result = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L110">        result.add(new Transition(tliStartSeconds, Phase.INYECCION_TRANSLUNAR));</span>
+<span class="fc" id="L111">        result.add(new Transition(tliEndSeconds, Phase.COSTA_TRANSLUNAR));</span>
+<span class="fc" id="L112">        result.add(new Transition(lunarEntrySeconds, Phase.SOBREVUELO_LUNAR));</span>
+<span class="fc" id="L113">        result.add(new Transition(lunarExitSeconds, Phase.RETORNO_LIBRE));</span>
+<span class="fc" id="L114">        result.add(new Transition(reentryStartSeconds, Phase.REINGRESO));</span>
+<span class="fc" id="L115">        return List.copyOf(result);</span>
+    }
+
+    double getTliCenterSeconds() {
+<span class="fc" id="L119">        return tliCenterSeconds;</span>
+    }
+
+    double getLunarEncounterSeconds() {
+<span class="fc" id="L123">        return lunarEncounterSeconds;</span>
+    }
+
+    double getEndSeconds() {
+<span class="fc" id="L127">        return endSeconds;</span>
+    }
+
+    private static int indexOfMinimumMoonDistance(List&lt;MissionState&gt; states) {
+<span class="fc" id="L131">        int result = 0;</span>
+<span class="fc bfc" id="L132" title="All 2 branches covered.">        for (int index = 1; index &lt; states.size(); index++) {</span>
+<span class="fc bfc" id="L133" title="All 2 branches covered.">            if (states.get(index).getDistanceMoon() &lt; states.get(result).getDistanceMoon()) {</span>
+<span class="fc" id="L134">                result = index;</span>
+            }
+        }
+<span class="fc" id="L137">        return result;</span>
+    }
+
+    /**
+     * El ultimo perigeo terrestre antes de la salida sostenida coincide con la
+     * maniobra TLI en la efemeride de referencia.
+     */
+    private static int indexOfDeparturePerigee(List&lt;MissionState&gt; states, int encounterIndex) {
+<span class="fc" id="L145">        double encounterTime = states.get(encounterIndex).getElapsedTime();</span>
+<span class="fc" id="L146">        double searchEnd = Math.min(encounterTime * 0.45, 48.0 * 60.0 * 60.0);</span>
+<span class="fc" id="L147">        int result = 0;</span>
+<span class="pc bpc" id="L148" title="1 of 2 branches missed.">        for (int index = 1; index &lt; encounterIndex - 1; index++) {</span>
+<span class="fc" id="L149">            MissionState current = states.get(index);</span>
+<span class="fc bfc" id="L150" title="All 2 branches covered.">            if (current.getElapsedTime() &gt; searchEnd) {</span>
+<span class="fc" id="L151">                break;</span>
+            }
+<span class="fc" id="L153">            double previousDistance = states.get(index - 1).getDistanceEarth();</span>
+<span class="fc" id="L154">            double currentDistance = current.getDistanceEarth();</span>
+<span class="fc" id="L155">            double nextDistance = states.get(index + 1).getDistanceEarth();</span>
+<span class="pc bpc" id="L156" title="1 of 6 branches missed.">            if (currentDistance &lt;= previousDistance</span>
+                    &amp;&amp; currentDistance &lt;= nextDistance
+                    &amp;&amp; currentDistance &lt; 100_000.0) {
+<span class="fc" id="L159">                result = index;</span>
+            }
+        }
+<span class="pc bpc" id="L162" title="1 of 2 branches missed.">        if (result &gt; 0) {</span>
+<span class="fc" id="L163">            return result;</span>
+        }
+
+<span class="nc" id="L166">        int fallbackEnd = Math.max(1, Math.min(encounterIndex, states.size() / 3));</span>
+<span class="nc bnc" id="L167" title="All 2 branches missed.">        for (int index = 1; index &lt;= fallbackEnd; index++) {</span>
+<span class="nc bnc" id="L168" title="All 2 branches missed.">            if (states.get(index).getDistanceEarth() &lt; states.get(result).getDistanceEarth()) {</span>
+<span class="nc" id="L169">                result = index;</span>
+            }
+        }
+<span class="nc" id="L172">        return result;</span>
+    }
+
+    private static int firstWithinMoonDistance(
+            List&lt;MissionState&gt; states,
+            int startIndex,
+            int encounterIndex) {
+<span class="pc bpc" id="L179" title="1 of 2 branches missed.">        for (int index = Math.max(0, startIndex); index &lt;= encounterIndex; index++) {</span>
+<span class="fc bfc" id="L180" title="All 2 branches covered.">            if (states.get(index).getDistanceMoon() &lt;= LUNAR_INFLUENCE_DISTANCE_KM) {</span>
+<span class="fc" id="L181">                return index;</span>
+            }
+        }
+<span class="nc" id="L184">        return encounterIndex;</span>
+    }
+
+    private static int firstOutsideMoonDistance(List&lt;MissionState&gt; states, int encounterIndex) {
+<span class="pc bpc" id="L188" title="1 of 2 branches missed.">        for (int index = encounterIndex; index &lt; states.size(); index++) {</span>
+<span class="fc bfc" id="L189" title="All 2 branches covered.">            if (states.get(index).getDistanceMoon() &gt; LUNAR_INFLUENCE_DISTANCE_KM) {</span>
+<span class="fc" id="L190">                return index;</span>
+            }
+        }
+<span class="nc" id="L193">        return states.size() - 1;</span>
+    }
+
+    private static int firstReturnWithinEarthDistance(List&lt;MissionState&gt; states, int startIndex) {
+<span class="pc bpc" id="L197" title="1 of 2 branches missed.">        for (int index = Math.max(0, startIndex); index &lt; states.size(); index++) {</span>
+<span class="fc bfc" id="L198" title="All 2 branches covered.">            if (states.get(index).getDistanceEarth() &lt;= REENTRY_APPROACH_DISTANCE_KM) {</span>
+<span class="fc" id="L199">                return index;</span>
+            }
+        }
+<span class="nc" id="L202">        return states.size() - 1;</span>
+    }
+
+    /** Nombre, siguiente evento y color compartidos por controlador y mapa. */
+<span class="fc" id="L206">    enum Phase {</span>
+<span class="fc" id="L207">        ORBITA_TERRESTRE(&quot;Orbita terrestre&quot;, &quot;Inyeccion translunar&quot;, &quot;#6DA8FF&quot;),</span>
+<span class="fc" id="L208">        INYECCION_TRANSLUNAR(&quot;Inyeccion translunar&quot;, &quot;Costa translunar&quot;, &quot;#A46C93&quot;),</span>
+<span class="fc" id="L209">        COSTA_TRANSLUNAR(&quot;Costa translunar&quot;, &quot;Sobrevuelo lunar&quot;, &quot;#A46CFF&quot;),</span>
+<span class="fc" id="L210">        SOBREVUELO_LUNAR(&quot;Sobrevuelo lunar&quot;, &quot;Retorno libre&quot;, &quot;#C79CFF&quot;),</span>
+<span class="fc" id="L211">        RETORNO_LIBRE(&quot;Retorno libre&quot;, &quot;Reingreso&quot;, &quot;#6DA8FF&quot;),</span>
+<span class="fc" id="L212">        REINGRESO(&quot;Reingreso&quot;, &quot;Completar mision&quot;, &quot;#A46C93&quot;);</span>
+
+        private final String displayName;
+        private final String nextEvent;
+        private final String color;
+
+<span class="fc" id="L218">        Phase(String displayName, String nextEvent, String color) {</span>
+<span class="fc" id="L219">            this.displayName = displayName;</span>
+<span class="fc" id="L220">            this.nextEvent = nextEvent;</span>
+<span class="fc" id="L221">            this.color = color;</span>
+<span class="fc" id="L222">        }</span>
+
+        String displayName() {
+<span class="nc" id="L225">            return displayName;</span>
+        }
+
+        String nextEvent() {
+<span class="nc" id="L229">            return nextEvent;</span>
+        }
+
+        String color() {
+<span class="fc" id="L233">            return color;</span>
+        }
+    }
+
+<span class="fc" id="L237">    record Transition(double elapsedSeconds, Phase phase) {</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>
