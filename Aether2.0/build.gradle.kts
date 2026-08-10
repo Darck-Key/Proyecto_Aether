@@ -51,6 +51,8 @@ dependencies {
     runtimeOnly("com.mysql:mysql-connector-j:8.4.0")
 
     testImplementation("org.junit.jupiter:junit-jupiter-api:${junitVersion}")
+    testImplementation("org.junit.jupiter:junit-jupiter-params:${junitVersion}")
+    testImplementation("org.mockito:mockito-core:5.12.0")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:${junitVersion}")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:${junitPlatformVersion}")
 }

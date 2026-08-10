@@ -14,6 +14,8 @@
         <maven.compiler.release>21</maven.compiler.release>
         <javafx.version>21.0.6</javafx.version>
         <junit.version>5.12.1</junit.version>
+        <mockito.version>5.12.0</mockito.version>
+        <jacoco.version>0.8.12</jacoco.version>
     </properties>
 
     <dependencies>
@@ -54,6 +56,18 @@
             <version>${junit.version}</version>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-params</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <version>${mockito.version}</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -81,6 +95,64 @@
                 <configuration>
                     <useModulePath>true</useModulePath>
                 </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-report-plugin</artifactId>
+                <version>3.5.0</version>
+            </plugin>
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>${jacoco.version}</version>
+                <configuration>
+                    <excludes>
+                        <exclude>com/example/demoaether/HelloApplication*</exclude>
+                        <exclude>com/example/demoaether/HelloController*</exclude>
+                        <exclude>com/example/demoaether/Launcher*</exclude>
+                        <exclude>com/example/demoaether/MissionMap3D*</exclude>
+                        <exclude>com/example/demoaether/MissionInput*</exclude>
+                        <exclude>com/example/demoaether/MissionPresets*</exclude>
+                        <exclude>com/example/demoaether/MySqlAetherRepository*</exclude>
+                        <exclude>com/example/demoaether/PendingDatabaseRepository*</exclude>
+                        <exclude>com/example/demoaether/NetworkQualityService*</exclude>
+                    </excludes>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>check</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <rule>
+                                    <element>BUNDLE</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>CLASS</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.60</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

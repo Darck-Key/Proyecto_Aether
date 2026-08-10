@@ -11,7 +11,7 @@ import java.util.List;
  * - OrekitTrajectoryPlanner calcula la lista de puntos usando Orekit.
  *
  * Quien lo consume:
- * - MissionSimulator anima estos estados uno por uno.
+ * - TrajectoryPlayback interpola estos estados en el hilo JavaFX.
  * - HelloController recibe cada MissionState y actualiza la interfaz.
  */
 public class MissionTrajectory {
@@ -42,5 +42,11 @@ public class MissionTrajectory {
     public MissionState lastState() {
         // Acceso rapido al resultado final usado por reportes o guardado de cierre.
         return states.isEmpty() ? null : states.get(states.size() - 1);
+    }
+
+    /** Devuelve el tiempo de mision del ultimo estado, no la duracion de pared. */
+    public double getDurationSeconds() {
+        MissionState last = lastState();
+        return last == null ? 0.0 : last.getElapsedTime();
     }
 }

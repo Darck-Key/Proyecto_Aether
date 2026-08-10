@@ -71,10 +71,14 @@ public class HelloController implements SimulationListener {
     private MissionSimulator simulator;
     private MissionState lastState;
     private Thread simulationThread;
+    private TrajectoryPlayback trajectoryPlayback;
     private boolean orbitCalculated;
     private boolean reportGenerated;
     private boolean simulationSaved;
     private double lastMapRenderSecond = -1;
+    private double activeMissionDurationSeconds = 1.0;
+    private int activeTrajectoryPointCount = 1;
+    private MissionPhaseTimeline activeMissionTimeline;
     private ScheduledExecutorService networkMonitor;
     private final AetherRepository repository = RepositoryFactory.createRepository();
 
@@ -92,10 +96,7 @@ public class HelloController implements SimulationListener {
         // Punto de entrada de la interfaz: carga configuracion, prepara telemetria, mapa, MySQL y login.
         // Llama a RepositoryFactory por medio de repository, inicializa MissionMap3D y activa NetworkQualityService.
         Locale.setDefault(Locale.US);
-        config = repository.loadLastMissionConfig();
-        if (config == null) {
-            config = new MissionConfig();
-        }
+        config = MissionPresets.migrateLegacyArtemisII(repository.loadLastMissionConfig());
         if (config.getSimulationHours() <= 0) {
             config.setSimulationHours(10);
         }
@@ -198,8 +199,9 @@ public class HelloController implements SimulationListener {
         ButtonType pause = new ButtonType("Pausar/Reanudar", ButtonBar.ButtonData.LEFT);
         ButtonType stop = new ButtonType("Detener", ButtonBar.ButtonData.NO);
         ButtonType reset = new ButtonType("Reiniciar", ButtonBar.ButtonData.OTHER);
+        ButtonType demo = new ButtonType("Demo rapida", ButtonBar.ButtonData.OTHER);
         ButtonType close = new ButtonType("Cerrar", ButtonBar.ButtonData.CANCEL_CLOSE);
-        dialog.getDialogPane().getButtonTypes().addAll(calculate, start, pause, stop, reset, close);
+        dialog.getDialogPane().getButtonTypes().addAll(calculate, start, demo, pause, stop, reset, close);
         styleDialog(dialog);
 
         Optional<ButtonType> result = dialog.showAndWait();
@@ -220,6 +222,14 @@ public class HelloController implements SimulationListener {
                 resetSimulation();
                 return;
             }
+            if (result.get() == demo) {
+                // La demo conserva todos los parametros fisicos; solo comprime el reloj visual.
+                config = readConfig(missionName, spacecraftName, mass, altitude, velocity,
+                        inclination, eccentricity, argument, tliDeltaV, tliOffset, hours, timeScale);
+                repository.saveMissionConfig(config, LocalDateTime.now());
+                startSimulation(true);
+                return;
+            }
 
             MissionConfig updated = readConfig(missionName, spacecraftName, mass, altitude, velocity,
                     inclination, eccentricity, argument, tliDeltaV, tliOffset, hours, timeScale);
@@ -227,12 +237,12 @@ public class HelloController implements SimulationListener {
             repository.saveMissionConfig(config, LocalDateTime.now());
 
             if (result.get() == start) {
-                startSimulation();
+                startSimulation(false);
                 return;
             }
             calculateOrbit(true);
         } catch (IllegalArgumentException exception) {
-            showError("Datos invalidos", exception.getMessage());
+            showError("Datos invalidos", safeExceptionMessage(exception));
         }
     }
 
@@ -311,7 +321,7 @@ public class HelloController implements SimulationListener {
                 showInfo("Reporte generado", pdf.getAbsolutePath() + "\nHistorial incluido: " + history.size() + " calculos.");
             }
         } catch (IOException exception) {
-            showError("No se pudo generar el reporte", exception.getMessage());
+            showError("No se pudo generar el reporte", safeExceptionMessage(exception));
         }
     }
 
@@ -364,13 +374,13 @@ public class HelloController implements SimulationListener {
             if (lblOrekitStatus != null) {
                 lblOrekitStatus.setText("Orekit: error");
             }
-            showError("Error de calculo", exception.getMessage());
+            showError("Error de calculo", safeExceptionMessage(exception));
         }
     }
 
-    private void startSimulation() {
-        // Arranca la simulacion en un hilo separado para no congelar JavaFX.
-        // Crea MissionSimulator, registra este controlador como SimulationListener y ejecuta startSimulation().
+    private void startSimulation(boolean quickDemo) {
+        // Precalcula fuera de JavaFX y reproduce en AnimationTimer dentro de JavaFX.
+        // La bandera quickDemo solo cambia la duracion de pared, nunca MissionTrajectory.
         if (simulator != null && simulator.isRunning()) {
             showInfo("Simulacion", "La simulacion ya esta en ejecucion.");
             return;
@@ -389,11 +399,63 @@ public class HelloController implements SimulationListener {
             lblNextEvent.setText("Siguiente: primer estado orbital");
         }
 
-        simulator = new MissionSimulator(config);
-        simulator.setSimulationListener(this);
-        simulationThread = new Thread(simulator::startSimulation, "aether-orekit-simulation");
+        MissionMap3D.resetTrail();
+        lastMapRenderSecond = -1;
+        MissionSimulator preparedSimulator = new MissionSimulator(config);
+        preparedSimulator.setSimulationListener(this);
+        simulator = preparedSimulator;
+        simulationThread = new Thread(() -> {
+            try {
+                MissionTrajectory trajectory = preparedSimulator.prepareTrajectory();
+                Platform.runLater(() -> beginTrajectoryPlayback(preparedSimulator, trajectory, quickDemo));
+            } catch (Exception exception) {
+                preparedSimulator.failSimulation(exception);
+            }
+        }, "aether-orekit-precalculation");
         simulationThread.setDaemon(true);
         simulationThread.start();
+    }
+
+    /**
+     * Conecta una trayectoria ya calculada al mapa persistente y al reloj JavaFX.
+     * Lo llama el hilo de precalculo mediante Platform.runLater().
+     */
+    private void beginTrajectoryPlayback(
+            MissionSimulator preparedSimulator,
+            MissionTrajectory trajectory,
+            boolean quickDemo) {
+        if (simulator != preparedSimulator || !preparedSimulator.isRunning()) {
+            return;
+        }
+        try {
+            activeMissionDurationSeconds = Math.max(1.0, trajectory.getDurationSeconds());
+            activeTrajectoryPointCount = Math.max(1, trajectory.getStates().size());
+            activeMissionTimeline = MissionPhaseTimeline.from(trajectory);
+            if (missionMapContainer != null) {
+                missionMapContainer.getChildren().setAll(MissionMap3D.configureTrajectory(trajectory));
+            }
+        } catch (RuntimeException exception) {
+            preparedSimulator.failSimulation(exception);
+            return;
+        }
+        lblEstado.setText("SIMULANDO");
+        setSystemState("SIMULANDO");
+        if (lblOrekitStatus != null) {
+            lblOrekitStatus.setText(ArtemisReferenceTrajectoryLoader.supports(config)
+                    ? "Orekit: efemeride NASA"
+                    : "Orekit: trayectoria propagada");
+        }
+
+        trajectoryPlayback = new TrajectoryPlayback(
+                trajectory,
+                config.getSimulationSpeed(),
+                quickDemo,
+                preparedSimulator::publishState,
+                preparedSimulator::completeSimulation
+        );
+        recordEventAsync("SIMULACION_INICIADA",
+                quickDemo ? "Demo rapida con trayectoria orbital completa" : "Simulacion orbital iniciada");
+        trajectoryPlayback.start();
     }
 
     private void togglePause() {
@@ -402,8 +464,11 @@ public class HelloController implements SimulationListener {
             showInfo("Simulacion", "No hay una simulacion activa para pausar o reanudar.");
             return;
         }
-        simulator.togglePaused();
-        if (simulator.isPaused()) {
+        boolean paused = trajectoryPlayback != null
+                ? trajectoryPlayback.togglePaused()
+                : !simulator.isPaused();
+        simulator.setPaused(paused);
+        if (paused) {
             lblEstado.setText("PAUSADA");
             setSystemState("PAUSADA");
         } else {
@@ -416,6 +481,10 @@ public class HelloController implements SimulationListener {
         // Detiene MissionSimulator y guarda una captura final por medio del repositorio activo.
         if (simulator != null) {
             simulator.stopSimulation();
+        }
+        if (trajectoryPlayback != null) {
+            trajectoryPlayback.cancel();
+            trajectoryPlayback = null;
         }
         lblEstado.setText("DETENIDA");
         setSystemState("DETENIDA");
@@ -433,6 +502,9 @@ public class HelloController implements SimulationListener {
         // Limpia telemetria, flags y mapa para regresar la interfaz a estado LISTO.
         stopSimulation();
         lastState = null;
+        activeMissionDurationSeconds = 1.0;
+        activeTrajectoryPointCount = 1;
+        activeMissionTimeline = null;
         orbitCalculated = false;
         reportGenerated = false;
         simulationSaved = false;
@@ -464,14 +536,14 @@ public class HelloController implements SimulationListener {
      */
     @Override
     public void onSimulationStarted() {
-        // Callback de MissionSimulator: se ejecuta al iniciar propagacion y registra evento de inicio.
+        // Callback de precalculo: todavia no mueve la nave hasta recibir la trayectoria completa.
         Platform.runLater(() -> {
-            lblEstado.setText("SIMULANDO");
-            setSystemState("SIMULANDO");
+            lblEstado.setText("PREPARANDO");
+            setSystemState("PREPARANDO");
             if (lblOrekitStatus != null) {
-                lblOrekitStatus.setText("Simulacion: en vivo");
+                lblOrekitStatus.setText("Orekit: precalculando");
             }
-            recordEventAsync("SIMULACION_INICIADA", "Simulacion orbital iniciada");
+            recordEventAsync("PRECALCULO_INICIADO", "Orekit prepara la trayectoria orbital");
         });
     }
 
@@ -482,13 +554,18 @@ public class HelloController implements SimulationListener {
      */
     @Override
     public void onStateUpdated(MissionState state) {
-        // Callback de MissionSimulator: recibe cada MissionState y lo pinta en telemetria/mapa.
-        Platform.runLater(() -> {
+        // AnimationTimer ya llama desde JavaFX; las pruebas heredadas pueden llamar desde otro hilo.
+        Runnable update = () -> {
             applyMissionState(state);
             if (lblLastCalculation != null) {
                 lblLastCalculation.setText("Simulando: " + formatTime((int) state.getElapsedTime()));
             }
-        });
+        };
+        if (Platform.isFxApplicationThread()) {
+            update.run();
+        } else {
+            Platform.runLater(update);
+        }
     }
 
     /**
@@ -496,8 +573,8 @@ public class HelloController implements SimulationListener {
      */
     @Override
     public void onSimulationFinished() {
-        // Callback de MissionSimulator: guarda resultado final, registra evento y devuelve el mapa al inicio visual.
-        Platform.runLater(() -> {
+        // Conserva el ultimo estado visible; Reiniciar es la unica accion que vuelve a T+0.
+        Runnable finish = () -> {
             lblEstado.setText("COMPLETADA");
             setSystemState("COMPLETADA");
             if (lblCurrentPhase != null) {
@@ -508,8 +585,13 @@ public class HelloController implements SimulationListener {
             }
             saveSimulationSnapshotAsync("SIMULACION_COMPLETADA");
             recordEventAsync("SIMULACION_COMPLETADA", "Simulacion orbital completada");
-            returnSimulationToStartView();
-        });
+            completeSimulationPlayback();
+        };
+        if (Platform.isFxApplicationThread()) {
+            finish.run();
+        } else {
+            Platform.runLater(finish);
+        }
     }
 
     /**
@@ -521,13 +603,19 @@ public class HelloController implements SimulationListener {
     public void onSimulationError(Exception exception) {
         // Callback de MissionSimulator: registra el error de propagacion y lo muestra al usuario.
         Platform.runLater(() -> {
+            if (trajectoryPlayback != null) {
+                trajectoryPlayback.cancel();
+                trajectoryPlayback = null;
+            }
+            simulationThread = null;
             lblEstado.setText("ERROR");
             setSystemState("ERROR");
             if (lblOrekitStatus != null) {
                 lblOrekitStatus.setText("Orekit: error");
             }
-            recordEventAsync("SIMULACION_ERROR", exception.getMessage());
-            showError("Error de simulacion", exception.getMessage());
+            String message = safeExceptionMessage(exception);
+            recordEventAsync("SIMULACION_ERROR", message);
+            showError("Error de simulacion", message);
         });
     }
 
@@ -540,17 +628,18 @@ public class HelloController implements SimulationListener {
         // Traduce MissionState a etiquetas de telemetria y refresca MissionMap3D.
         lastState = state;
         orbitCalculated = true;
-        lblTiempo.setText(formatTime((int) state.getElapsedTime()));
-        lblVelocidad.setText(String.format(Locale.US, "%.2f km/s", state.getVelocity()));
-        lblAltitud.setText(String.format(Locale.US, "%,.0f km", state.getAltitude()));
-        lblDistanciaLuna.setText(String.format(Locale.US, "%,.0f km", state.getDistanceMoon()));
+        TelemetryViewModel telemetry = TelemetryViewModel.fromState(state);
+        lblTiempo.setText(telemetry.getElapsedTimeText());
+        lblVelocidad.setText(telemetry.getVelocityText());
+        lblAltitud.setText(telemetry.getAltitudeText());
+        lblDistanciaLuna.setText(telemetry.getMoonDistanceText());
 
         if (lblTiempoLanzamiento != null) {
-            lblTiempoLanzamiento.setText(formatTime((int) state.getElapsedTime()));
+            lblTiempoLanzamiento.setText(telemetry.getElapsedTimeText());
         }
         updateMissionPhase(state);
 
-        double fuel = Math.max(0.0, 1.0 - (state.getElapsedTime() / Math.max(1.0, config.getSimulationHours() * 3600.0)) * 0.35);
+        double fuel = calculateFuelLevel(state);
         lblCombustible.setText(String.format(Locale.US, "%.0f %%", fuel * 100));
         if (pbCombustible != null) {
             pbCombustible.setProgress(fuel);
@@ -559,16 +648,23 @@ public class HelloController implements SimulationListener {
         updateMissionMapIfNeeded(state);
     }
 
+    private double calculateFuelLevel(MissionState state) {
+        // Modelo visual de combustible: no pretende ser masa real de propelente.
+        // Lo llama applyMissionState() para que la telemetria muestre consumo visible por fases.
+        double totalSeconds = Math.max(1.0, activeMissionDurationSeconds);
+        double progress = state == null ? 0.0 : Math.min(1.0, Math.max(0.0, state.getElapsedTime() / totalSeconds));
+        double cruiseConsumption = progress * 0.10;
+        double launchBurn = progress >= 0.03 ? 0.08 : progress / 0.03 * 0.08;
+        double tliBurn = progress >= 0.20 ? 0.10 : Math.max(0.0, (progress - 0.10) / 0.10) * 0.10;
+        double correctionBurns = progress >= 0.72 ? 0.08 : Math.max(0.0, (progress - 0.30) / 0.42) * 0.08;
+        double reentryReserveUse = progress >= 0.94 ? Math.max(0.0, (progress - 0.94) / 0.06) * 0.04 : 0.0;
+        return Math.max(0.55, 1.0 - launchBurn - tliBurn - correctionBurns - cruiseConsumption - reentryReserveUse);
+    }
+
     private void updateMissionMapIfNeeded(MissionState state) {
         if (state == null) {
             return;
         }
-        boolean firstRender = lastMapRenderSecond < 0;
-        boolean enoughSimulatedTimePassed = state.getElapsedTime() - lastMapRenderSecond >= 300;
-        if (!firstRender && !enoughSimulatedTimePassed) {
-            return;
-        }
-
         try {
             updateMissionMap(state);
             lastMapRenderSecond = state.getElapsedTime();
@@ -579,34 +675,42 @@ public class HelloController implements SimulationListener {
         }
     }
 
+    private double mapRefreshIntervalSeconds() {
+        // Ajusta cada cuanto se redibuja el mapa 3D segun la escala seleccionada.
+        // Lo llama updateMissionMapIfNeeded(); busca suficientes frames para movimiento fluido sin saturar JavaFX.
+        int speed = Math.max(1, config.getSimulationSpeed());
+        double missionSeconds = Math.max(1.0, config.getSimulationHours() * 3600.0);
+        if (speed >= 900) {
+            return Math.max(12.0, missionSeconds / 140.0);
+        }
+        if (speed >= 500) {
+            return Math.max(18.0, missionSeconds / 120.0);
+        }
+        if (speed >= 200) {
+            return Math.max(24.0, missionSeconds / 100.0);
+        }
+        return Math.max(30.0, missionSeconds / 80.0);
+    }
+
     private void updateMissionPhase(MissionState state) {
         double elapsed = state == null ? 0 : state.getElapsedTime();
+        double totalSeconds = Math.max(1.0, activeMissionDurationSeconds);
+        double progress = Math.min(1.0, Math.max(0.0, elapsed / totalSeconds));
         String phase;
         String next;
         if (state == null) {
             phase = "Espera";
             next = "Lanzamiento";
-        } else if (elapsed < 600) {
-            phase = "Lanzamiento";
-            next = "Orbita terrestre";
-        } else if (elapsed < 3600) {
-            phase = "Orbita terrestre";
-            next = "Inyeccion translunar";
-        } else if (elapsed < 3 * 3600) {
-            phase = "Inyeccion translunar";
-            next = "Costa translunar";
-        } else if (elapsed < 7 * 3600) {
-            phase = "Costa translunar";
-            next = "Sobrevuelo lunar";
-        } else if (elapsed < 8 * 3600) {
-            phase = "Sobrevuelo lunar";
-            next = "Retorno libre";
-        } else if (elapsed < 9.5 * 3600) {
-            phase = "Retorno libre";
-            next = "Reingreso";
+        } else if (progress >= 1.0) {
+            phase = "Completada";
+            next = "generar reporte";
         } else {
-            phase = "Reingreso";
-            next = "Reporte de mision";
+            // MissionPhaseTimeline detecta los hitos en la efemeride; no usa porcentajes arbitrarios.
+            MissionPhaseTimeline.Phase currentPhase = activeMissionTimeline == null
+                    ? MissionPhaseTimeline.Phase.ORBITA_TERRESTRE
+                    : activeMissionTimeline.phaseAt(elapsed);
+            phase = currentPhase.displayName();
+            next = currentPhase.nextEvent();
         }
         if (lblCurrentPhase != null) {
             lblCurrentPhase.setText("Paso " + formatStep(state) + " - " + phase);
@@ -620,9 +724,10 @@ public class HelloController implements SimulationListener {
         if (state == null) {
             return "0/0";
         }
-        int stepSeconds = Math.max(1, config.getSimulationStepSeconds());
-        int totalSteps = Math.max(1, (config.getSimulationHours() * 3600) / stepSeconds);
-        int currentStep = Math.min(totalSteps, Math.max(0, (int) state.getElapsedTime() / stepSeconds));
+        int totalSteps = Math.max(1, activeTrajectoryPointCount - 1);
+        double progress = Math.min(1.0,
+                Math.max(0.0, state.getElapsedTime() / Math.max(1.0, activeMissionDurationSeconds)));
+        int currentStep = Math.min(totalSteps, Math.max(0, (int) Math.round(progress * totalSteps)));
         return currentStep + "/" + totalSteps;
     }
 
@@ -646,6 +751,27 @@ public class HelloController implements SimulationListener {
         updated.setSimulationSpeed((int) Math.round(timeScale.getValue()));
         updated.validate();
         return updated;
+    }
+
+    private MissionConfig createDemoConfig() {
+        // LEGACY, no invocado: Demo rapida ya no modifica parametros orbitales ni duracion.
+        MissionConfig demo = new MissionConfig();
+        demo.setMissionName(config.getMissionName());
+        demo.setSpacecraftName(config.getSpacecraftName());
+        demo.setSpacecraftMass(config.getSpacecraftMass());
+        demo.setInitialAltitude(config.getInitialAltitude());
+        demo.setInitialVelocity(config.getInitialVelocity());
+        demo.setInclination(config.getInclination());
+        demo.setEccentricity(config.getEccentricity());
+        demo.setArgumentOfPerigee(config.getArgumentOfPerigee());
+        demo.setTliDeltaVKms(config.getTliDeltaVKms());
+        demo.setTliBurnOffsetHours(config.getTliBurnOffsetHours());
+        demo.setSimulationHours(config.getSimulationHours());
+        demo.setSimulationStepSeconds(config.getSimulationStepSeconds());
+        demo.setSimulationSpeed(1000);
+        demo.setSaveReports(config.isSaveReports());
+        demo.validate();
+        return demo;
     }
 
     private void requestLogin() {
@@ -769,6 +895,7 @@ public class HelloController implements SimulationListener {
         if (missionMapContainer == null) {
             return;
         }
+        MissionMap3D.resetTrail();
         missionMapContainer.getChildren().setAll(MissionMap3D.createPlaceholder());
     }
 
@@ -776,7 +903,8 @@ public class HelloController implements SimulationListener {
         if (missionMapContainer == null || state == null) {
             return;
         }
-        missionMapContainer.getChildren().setAll(MissionMap3D.createScene(state));
+        // MissionMap3D conserva la misma SubScene y mueve solo la nave/trayectoria revelada.
+        MissionMap3D.updateState(state);
     }
 
     private void refreshMissionMap() {
@@ -952,24 +1080,18 @@ public class HelloController implements SimulationListener {
         snapshotThread.start();
     }
 
-    private void returnSimulationToStartView() {
-        simulator = null;
+    private void completeSimulationPlayback() {
+        // Libera el reloj y el hilo, pero deja reloj, combustible y mapa en el estado final.
+        trajectoryPlayback = null;
         simulationThread = null;
-        MissionState completedState = lastState;
-        lastState = completedState;
-        orbitCalculated = completedState != null;
-        lblTiempo.setText("00:00:00");
-        if (lblTiempoLanzamiento != null) {
-            lblTiempoLanzamiento.setText("00:00:00");
-        }
+        orbitCalculated = lastState != null;
         if (lblCurrentPhase != null) {
-            lblCurrentPhase.setText("Paso 0/0 - Espera");
+            lblCurrentPhase.setText("Fase actual: Completada");
         }
         if (lblNextEvent != null) {
-            lblNextEvent.setText("Siguiente: Lanzamiento");
+            lblNextEvent.setText("Siguiente: generar reporte");
         }
-        lastMapRenderSecond = -1;
-        initializeMissionMap();
+        lastMapRenderSecond = lastState == null ? -1 : lastState.getElapsedTime();
     }
 
     private String formatEvent(MissionEventEntry event) {
@@ -1133,7 +1255,7 @@ public class HelloController implements SimulationListener {
                 showInfo("Archivo", resolvedFile.getAbsolutePath());
             }
         } catch (IOException exception) {
-            showError("No se pudo abrir el archivo", exception.getMessage());
+            showError("No se pudo abrir el archivo", safeExceptionMessage(exception));
         }
     }
 
@@ -1195,5 +1317,26 @@ public class HelloController implements SimulationListener {
         styleDialog(alert);
         alert.setContentText(message == null ? "Error desconocido" : message);
         alert.showAndWait();
+    }
+
+    private String safeExceptionMessage(Exception exception) {
+        // Evita llamar directamente mensajes localizados que pueden fallar con Orekit en modo modular.
+        // Lo usan los dialogos y eventos para mostrar un texto estable sin romper JavaFX.
+        if (exception == null) {
+            return "Error desconocido";
+        }
+        try {
+            String message = exception.getMessage();
+            if (message != null && !message.isBlank()) {
+                return message;
+            }
+        } catch (RuntimeException messageFailure) {
+            return exception.getClass().getSimpleName() + " (" + messageFailure.getClass().getSimpleName() + ")";
+        }
+        Throwable cause = exception.getCause();
+        if (cause == null || cause == exception) {
+            return exception.getClass().getSimpleName();
+        }
+        return exception.getClass().getSimpleName() + " causado por " + cause.getClass().getSimpleName();
     }
 }

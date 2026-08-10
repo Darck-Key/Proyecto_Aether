@@ -5,7 +5,7 @@ package com.example.demoaether;
  *
  * Quien lo crea:
  * - OrekitTrajectoryPlanner al convertir SpacecraftState de Orekit.
- * - MissionSimulator cuando usa trayectoria de respaldo.
+ * - ArtemisReferenceTrajectoryLoader al leer la efemeride oficial de NASA.
  *
  * Quien lo consume:
  * - HelloController para actualizar etiquetas, mapa y reportes.
@@ -30,6 +30,12 @@ public class MissionState {
 
     private double altitude;
 
+    private double moonX;
+
+    private double moonY;
+
+    private double moonZ;
+
     public MissionState() {
     }
 
@@ -43,6 +49,30 @@ public class MissionState {
             double distanceMoon,
             double altitude) {
 
+        this(elapsedTime, x, y, z, velocity, distanceEarth, distanceMoon, altitude,
+                Double.NaN, Double.NaN, Double.NaN);
+    }
+
+    /**
+     * Construye un estado que tambien conserva la posicion de la Luna.
+     *
+     * <p>Quien lo llama: los adaptadores de Orekit. A quien sirve:
+     * MissionMap3D usa estas coordenadas para proyectar el sobrevuelo sin
+     * inventar un giro visual alrededor de la Luna.</p>
+     */
+    public MissionState(
+            double elapsedTime,
+            double x,
+            double y,
+            double z,
+            double velocity,
+            double distanceEarth,
+            double distanceMoon,
+            double altitude,
+            double moonX,
+            double moonY,
+            double moonZ) {
+
         // Guarda valores ya normalizados a kilometros y segundos para UI, MySQL y PDF.
         this.elapsedTime = elapsedTime;
         this.x = x;
@@ -52,6 +82,9 @@ public class MissionState {
         this.distanceEarth = distanceEarth;
         this.distanceMoon = distanceMoon;
         this.altitude = altitude;
+        this.moonX = moonX;
+        this.moonY = moonY;
+        this.moonZ = moonZ;
     }
 
     public double getElapsedTime() {
@@ -116,6 +149,25 @@ public class MissionState {
 
     public void setAltitude(double altitude) {
         this.altitude = altitude;
+    }
+
+    public double getMoonX() {
+        return moonX;
+    }
+
+    public double getMoonY() {
+        return moonY;
+    }
+
+    public double getMoonZ() {
+        return moonZ;
+    }
+
+    /**
+     * Indica si el estado incluye el vector lunar en el mismo marco que la nave.
+     */
+    public boolean hasMoonPosition() {
+        return Double.isFinite(moonX) && Double.isFinite(moonY) && Double.isFinite(moonZ);
     }
 
 }
