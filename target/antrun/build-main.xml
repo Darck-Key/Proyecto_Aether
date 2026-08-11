@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="maven-antrun-" default="main">
+  <target name="main">
+    <property name="deployment.root" value="C:\Users\pamii\OneDrive\Desktop\Aether2.0/paquete-despliegue" />
+    <property name="deployment.app" value="${deployment.root}/Aether2.0" />
+    <delete dir="${deployment.app}" />
+    <delete file="${deployment.root}/Aether2.0-paquete-despliegue.zip" />
+    <mkdir dir="${deployment.app}" />
+    <copy file="C:\Users\pamii\OneDrive\Desktop\Aether2.0\target/Aether2.0.jar" tofile="${deployment.app}/Aether2.0.jar" />
+    <copy todir="${deployment.app}">
+      <fileset dir="C:\Users\pamii\OneDrive\Desktop\Aether2.0/src/deployment" />
+    </copy>
+    <zip basedir="C:\Users\pamii\OneDrive\Desktop\Aether2.0/src/main/resources/orekit-data" destfile="${deployment.app}/orekit-data.zip" />
+    <zip destfile="${deployment.root}/Aether2.0-paquete-despliegue.zip">
+      <zipfileset excludes="run.sh" prefix="Aether2.0" dir="${deployment.app}" />
+      <zipfileset prefix="Aether2.0" includes="run.sh" filemode="755" dir="${deployment.app}" />
+    </zip>
+  </target>
+</project>

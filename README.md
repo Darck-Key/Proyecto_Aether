@@ -1,71 +1,85 @@
-# Proyecto Aether
-Simulador de misión lunar Aether desarrollado para INF272 utilizando Java, Orekit y JavaFX.
+# AETHER Mission Control Simulator
 
-<p align="center">
-  <img src="assets/Mision.jpeg" width="300"/>
-</p>
-<h1 align = "center">
-  Aether (eter)
-</h1>
-<br>
-  <p align = "center">
-  El antiguo concepto que se utilizaba para describir al
-  espacio exterior, tambien es considerado el aire puro que respiran los dioses.
-</p>
-<hr>
+Nombre clave de la mision: Artemis II.
 
-<h2 align = "center">
-  Descripcion del proyecto
-</h2>
-<hr>
+Distintivo del equipo: AETHER Mission Control.
 
-<p align = "center">
-  Simulador de la misión Artemis II desarrollado en Java utilizando Orekit y JavaFX. El proyecto recrea el viaje de la nave desde la Tierra hasta la Luna y su regreso, mostrando la trayectoria y datos de la misión en tiempo real. Además, aplica el ciclo completo de desarrollo de software, incluyendo análisis, diseño, pruebas y trabajo colaborativo.
-</p>
+## Descripcion
 
-<h2 align = "center">
-Registro de riesgos
-</h2>
-<br>
-<table>
-  <tr>
-<td> Riesgo </td>
-<td> Probabilidad </td>
-<td> Impacto </td>
-<td> Plan de mitigacion </td>
-  </tr>
+AETHER es una aplicacion JavaFX para visualizar una simulacion academica de la mision Artemis II. Integra una interfaz de control, telemetria, reportes PDF, persistencia MySQL y una capa de precalculo orbital con Orekit.
 
-<tr>
-<td> Mala comunicacion entre los miembros del equipo </td>
-<td> Media </td>
-<td> Alta </td>
-<td> Hablar con claridad en todo momento y repartir bien las tareas entre cada uno de los integrantes </td>
-</tr>
+## Requisitos
 
-<tr>
-<td> Complicaciones con el codigo y la simulacion </td>
-<td> Alta </td>
-<td> Alta </td>
-<td> Buscar ayuda en las partes que no entendamos ya sea al profesor o a la IA </td>
-</tr>
+- Java 21 o superior.
+- Maven 3.9 o superior para el entregable E4.
+- MySQL 8 si se desea persistencia real.
+- Internet solo para descargar dependencias Maven/Gradle la primera vez.
 
-<tr>
-<td> Retrasos en las entregas de los trabajos </td>
-<td> Media </td>
-<td> Alta </td>
-<td> Tener una fecha limite para entregar los trabajos antes de la fecha propuesta por el profesor, y revisar que todo este bien antes de realizar dicha entrega </td>
-</tr>
+## Compilar con Maven
 
-<tr>
-<td> Fallos durante las pruebas </td>
-<td> Media </td>
-<td> Alta </td>
-<td> Revisar los codigos entre todos y dar retroalimentaciones  </td>
-</tr>
+```powershell
+mvn clean package
+```
 
-<tr>
-<td> Dificultad para coordinar las reuniones </td>
-<td> Media </td>
-<td> Alta </td>
-<td> RPautar dos dias a la semana en los que todos los integrantes del grupo estemos desocupados para reunirnos y ponernos de acuerdo </td>
-</tr>
+## Ejecutar con Maven
+
+```powershell
+mvn javafx:run
+```
+
+## Compilar con Gradle
+
+```powershell
+.\gradlew.bat build
+```
+
+## Ejecutar con Gradle
+
+```powershell
+.\gradlew.bat run
+```
+
+## Variables MySQL
+
+La aplicacion lee estas variables para conectar la base de datos:
+
+```powershell
+$env:AETHER_DB_ENABLED="true"
+$env:AETHER_DB_URL="jdbc:mysql://localhost:3306/aether?serverTimezone=UTC"
+$env:AETHER_DB_USER="root"
+$env:AETHER_DB_PASSWORD="tu_password"
+```
+
+Si MySQL no esta disponible, AETHER usa un repositorio local en memoria para conservar historial durante la sesion activa.
+
+## Flujo tecnico principal
+
+- `HelloController` recibe acciones de la interfaz y llama al simulador, reportes y repositorio.
+- `MissionSimulator` ejecuta la simulacion en un hilo de fondo.
+- `OrekitTrajectoryPlanner` precalcula la trayectoria con Orekit antes de animarla.
+- `MissionMap3D` renderiza el mapa orbital en JavaFX 3D.
+- `MySqlAetherRepository` persiste calculos, eventos, configuraciones y reportes.
+- `ReportGenerator` crea reportes PDF.
+
+## Motor Orekit
+
+La capa Orekit configura:
+
+- `NumericalPropagator`.
+- Integrador `DormandPrince853`.
+- Gravedad terrestre por armonicos esfericos 8x8 mediante `HolmesFeatherstoneAttractionModel`.
+- Atraccion de tercer cuerpo de Luna y Sol.
+- Maniobra TLI con `ImpulseManeuver`.
+- Muestreo normalizado de minimo 500 puntos con `OrekitStepNormalizer`.
+- Detector de reentrada a 120 km con `AltitudeDetector`.
+- Configuracion inicial alineada con E4: orbita de estacionamiento circular de aproximadamente 185 km.
+
+## Datos Orekit
+
+Los datos estan en:
+
+```text
+src/main/resources/orekit-data
+```
+
+No deben moverse ni renombrarse.

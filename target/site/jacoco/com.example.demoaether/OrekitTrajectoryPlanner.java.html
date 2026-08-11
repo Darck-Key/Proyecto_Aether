@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="es"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>OrekitTrajectoryPlanner.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">AETHER Mission Control Simulator</a> &gt; <a href="index.source.html" class="el_package">com.example.demoaether</a> &gt; <span class="el_source">OrekitTrajectoryPlanner.java</span></div><h1>OrekitTrajectoryPlanner.java</h1><pre class="source lang-java linenums">package com.example.demoaether;
+
+import org.hipparchus.geometry.euclidean.threed.Vector3D;
+import org.hipparchus.ode.events.Action;
+import org.hipparchus.ode.nonstiff.DormandPrince853Integrator;
+import org.orekit.attitudes.LofOffset;
+import org.orekit.bodies.CelestialBody;
+import org.orekit.bodies.CelestialBodyFactory;
+import org.orekit.bodies.OneAxisEllipsoid;
+import org.orekit.forces.gravity.HolmesFeatherstoneAttractionModel;
+import org.orekit.forces.gravity.ThirdBodyAttraction;
+import org.orekit.forces.gravity.potential.GravityFieldFactory;
+import org.orekit.forces.gravity.potential.NormalizedSphericalHarmonicsProvider;
+import org.orekit.forces.maneuvers.ImpulseManeuver;
+import org.orekit.frames.Frame;
+import org.orekit.frames.FramesFactory;
+import org.orekit.frames.LOFType;
+import org.orekit.orbits.Orbit;
+import org.orekit.orbits.OrbitType;
+import org.orekit.propagation.SpacecraftState;
+import org.orekit.propagation.events.AltitudeDetector;
+import org.orekit.propagation.events.DateDetector;
+import org.orekit.propagation.numerical.NumericalPropagator;
+import org.orekit.propagation.sampling.OrekitStepNormalizer;
+import org.orekit.time.AbsoluteDate;
+import org.orekit.utils.Constants;
+import org.orekit.utils.IERSConventions;
+import org.orekit.utils.PVCoordinates;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.stream.Collectors;
+
+/**
+ * Motor de precalculo orbital basado en Orekit.
+ *
+ * Quien lo llama:
+ * - MissionSimulator llama precompute(config) antes de animar la UI.
+ *
+ * Que hace:
+ * - Inicializa Orekit.
+ * - Crea una orbita inicial en EME2000.
+ * - Configura NumericalPropagator con DormandPrince853.
+ * - Agrega gravedad terrestre 8x8, Luna, Sol y una maniobra TLI impulsiva.
+ * - Muestra a la UI una lista de MissionState ya calculados; la UI no propaga Orekit en tiempo real.
+ */
+public class OrekitTrajectoryPlanner {
+
+    private static final int MINIMUM_SAMPLES = 500;
+    private static final double REENTRY_ALTITUDE_M = 120_000.0;
+
+    private OrekitTrajectoryPlanner() {
+    }
+
+    /**
+     * Precalcula la trayectoria completa con Orekit antes de animarla.
+     *
+     * @param config parametros orbitales y TLI definidos por el usuario
+     * @return lista inmutable de MissionState y eventos detectados
+     */
+    public static MissionTrajectory precompute(MissionConfig config) {
+        // Metodo principal llamado por MissionSimulator.
+        // Devuelve MissionTrajectory con estados precalculados para que JavaFX solo anime resultados.
+<span class="fc" id="L65">        OrekitInitializer.initialize();</span>
+
+<span class="fc" id="L67">        Orbit initialOrbit = OrbitFactory.createInitialOrbit(config);</span>
+<span class="fc" id="L68">        NumericalPropagator propagator = createPropagator(initialOrbit, config);</span>
+<span class="fc" id="L69">        AbsoluteDate start = initialOrbit.getDate();</span>
+<span class="fc" id="L70">        AbsoluteDate end = start.shiftedBy(config.getSimulationHours() * 3600.0);</span>
+<span class="fc" id="L71">        List&lt;MissionState&gt; states = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L72">        List&lt;String&gt; events = new ArrayList&lt;&gt;();</span>
+
+<span class="fc" id="L74">        double fixedStepSeconds = Math.max(1.0, end.durationFrom(start) / MINIMUM_SAMPLES);</span>
+<span class="fc" id="L75">        propagator.setStepHandler(new OrekitStepNormalizer(fixedStepSeconds, state -&gt; {</span>
+<span class="fc" id="L76">            MissionState missionState = stateFromSpacecraftState(state, start);</span>
+<span class="fc" id="L77">            states.add(missionState);</span>
+<span class="fc" id="L78">        }));</span>
+
+<span class="fc" id="L80">        propagator.addEventDetector(createReentryDetector(events));</span>
+<span class="fc" id="L81">        propagator.propagate(start, end);</span>
+<span class="fc" id="L82">        addLunarPeriapsisEvent(states, events);</span>
+
+<span class="fc" id="L84">        return new MissionTrajectory(states, events, true);</span>
+    }
+
+    /**
+     * Devuelve los nombres de los modelos de fuerza configurados para pruebas E5.
+     *
+     * @param config parametros orbitales de entrada
+     * @return nombres simples de los ForceModel usados por el propagador
+     */
+    public static List&lt;String&gt; describeForceModels(MissionConfig config) {
+<span class="fc" id="L94">        OrekitInitializer.initialize();</span>
+<span class="fc" id="L95">        NumericalPropagator propagator = createPropagator(OrbitFactory.createInitialOrbit(config), config);</span>
+<span class="fc" id="L96">        return propagator.getAllForceModels().stream()</span>
+<span class="fc" id="L97">                .map(model -&gt; model.getClass().getSimpleName())</span>
+<span class="fc" id="L98">                .collect(Collectors.toList());</span>
+    }
+
+    /**
+     * Expone el umbral de reentrada OAM-7 para pruebas automatizadas y documentacion del E5.
+     *
+     * Quien lo llama:
+     * - OrekitTrajectoryPlannerTest valida que la interfaz de reentrada se mantenga en 120 km.
+     *
+     * A quien llama:
+     * - No llama a servicios externos; solo convierte la constante interna de metros a kilometros.
+     */
+    public static double reentryInterfaceAltitudeKm() {
+<span class="fc" id="L111">        return REENTRY_ALTITUDE_M / 1000.0;</span>
+    }
+
+    private static NumericalPropagator createPropagator(Orbit initialOrbit, MissionConfig config) {
+        // Configura el propagador fisico: integrador numerico, masa de nave, fuerzas y maniobra TLI.
+<span class="fc" id="L116">        double[][] tolerances = NumericalPropagator.tolerances(10.0, initialOrbit, OrbitType.CARTESIAN);</span>
+<span class="fc" id="L117">        DormandPrince853Integrator integrator = new DormandPrince853Integrator(</span>
+                0.001,
+                600.0,
+                tolerances[0],
+                tolerances[1]
+        );
+<span class="fc" id="L123">        integrator.setInitialStepSize(30.0);</span>
+
+<span class="fc" id="L125">        NumericalPropagator propagator = new NumericalPropagator(integrator);</span>
+        // La TLI puede producir energia positiva temporal. CARTESIAN admite ese
+        // tramo, mientras la representacion equinoccial rechaza orbitas hiperbolicas.
+<span class="fc" id="L128">        propagator.setOrbitType(OrbitType.CARTESIAN);</span>
+<span class="fc" id="L129">        propagator.setInitialState(new SpacecraftState(initialOrbit, config.getSpacecraftMass()));</span>
+
+        // OAM-3: gravedad terrestre por armonicos esfericos 8x8.
+<span class="fc" id="L132">        NormalizedSphericalHarmonicsProvider gravity = GravityFieldFactory.getNormalizedProvider(8, 8);</span>
+<span class="fc" id="L133">        propagator.addForceModel(new HolmesFeatherstoneAttractionModel(FramesFactory.getITRF(IERSConventions.IERS_2010, true), gravity));</span>
+
+        // OAM-3: atraccion de tercer cuerpo de Luna y Sol.
+<span class="fc" id="L136">        propagator.addForceModel(new ThirdBodyAttraction(CelestialBodyFactory.getMoon()));</span>
+<span class="fc" id="L137">        propagator.addForceModel(new ThirdBodyAttraction(CelestialBodyFactory.getSun()));</span>
+
+        // OAM-4: expresa la TLI en TNW para que X apunte en direccion prograda.
+        // MissionSimulator usa este propagador solo para perfiles personalizados.
+<span class="fc" id="L141">        AbsoluteDate burnDate = initialOrbit.getDate().shiftedBy(config.getTliBurnOffsetHours() * 3600.0);</span>
+<span class="fc" id="L142">        DateDetector burnTrigger = new DateDetector(burnDate);</span>
+<span class="fc" id="L143">        Vector3D deltaV = new Vector3D(config.getTliDeltaVKms() * 1000.0, 0.0, 0.0);</span>
+<span class="fc" id="L144">        LofOffset progradeFrame = new LofOffset(initialOrbit.getFrame(), LOFType.TNW);</span>
+<span class="fc" id="L145">        propagator.addEventDetector(new ImpulseManeuver(burnTrigger, progradeFrame, deltaV, 320.0));</span>
+
+<span class="fc" id="L147">        return propagator;</span>
+    }
+
+    private static AltitudeDetector createReentryDetector(List&lt;String&gt; events) {
+        // Detector de reentrada: agrega un evento si la nave cruza 120 km descendiendo.
+<span class="fc" id="L152">        OneAxisEllipsoid earth = new OneAxisEllipsoid(</span>
+                Constants.WGS84_EARTH_EQUATORIAL_RADIUS,
+                Constants.WGS84_EARTH_FLATTENING,
+<span class="fc" id="L155">                FramesFactory.getITRF(IERSConventions.IERS_2010, true)</span>
+        );
+<span class="fc" id="L157">        return new AltitudeDetector(REENTRY_ALTITUDE_M, earth).withHandler((state, detector, increasing) -&gt; {</span>
+<span class="nc bnc" id="L158" title="All 2 branches missed.">            if (!increasing) {</span>
+<span class="nc" id="L159">                events.add(&quot;Reentrada detectada a 120 km: &quot; + state.getDate());</span>
+            }
+<span class="nc" id="L161">            return Action.CONTINUE;</span>
+        });
+    }
+
+    private static MissionState stateFromSpacecraftState(SpacecraftState state, AbsoluteDate start) {
+        // Convierte SpacecraftState de Orekit a MissionState usado por la UI y los reportes.
+<span class="fc" id="L167">        PVCoordinates pv = state.getPVCoordinates();</span>
+<span class="fc" id="L168">        Frame frame = state.getFrame();</span>
+<span class="fc" id="L169">        double elapsedSeconds = state.getDate().durationFrom(start);</span>
+<span class="fc" id="L170">        double distanceEarthKm = pv.getPosition().getNorm() / 1000.0;</span>
+<span class="fc" id="L171">        double altitudeKm = distanceEarthKm - Constants.WGS84_EARTH_EQUATORIAL_RADIUS / 1000.0;</span>
+<span class="fc" id="L172">        Vector3D moonPosition = moonPosition(frame, state.getDate());</span>
+<span class="fc" id="L173">        double distanceMoonKm = Vector3D.distance(pv.getPosition(), moonPosition) / 1000.0;</span>
+<span class="fc" id="L174">        return new MissionState(</span>
+                elapsedSeconds,
+<span class="fc" id="L176">                pv.getPosition().getX() / 1000.0,</span>
+<span class="fc" id="L177">                pv.getPosition().getY() / 1000.0,</span>
+<span class="fc" id="L178">                pv.getPosition().getZ() / 1000.0,</span>
+<span class="fc" id="L179">                pv.getVelocity().getNorm() / 1000.0,</span>
+                distanceEarthKm,
+                distanceMoonKm,
+                altitudeKm,
+<span class="fc" id="L183">                moonPosition.getX() / 1000.0,</span>
+<span class="fc" id="L184">                moonPosition.getY() / 1000.0,</span>
+<span class="fc" id="L185">                moonPosition.getZ() / 1000.0</span>
+        );
+    }
+
+    private static Vector3D moonPosition(Frame frame, AbsoluteDate date) {
+        // Entrega la Luna en el mismo frame para que telemetria y mapa compartan geometria.
+<span class="fc" id="L191">        CelestialBody moon = CelestialBodyFactory.getMoon();</span>
+<span class="fc" id="L192">        return moon.getPVCoordinates(date, frame).getPosition();</span>
+    }
+
+    private static void addLunarPeriapsisEvent(List&lt;MissionState&gt; states, List&lt;String&gt; events) {
+        // Busca el punto de mayor acercamiento a la Luna entre los estados ya muestreados.
+<span class="fc" id="L197">        MissionState closest = null;</span>
+<span class="fc bfc" id="L198" title="All 2 branches covered.">        for (MissionState state : states) {</span>
+<span class="fc bfc" id="L199" title="All 4 branches covered.">            if (closest == null || state.getDistanceMoon() &lt; closest.getDistanceMoon()) {</span>
+<span class="fc" id="L200">                closest = state;</span>
+            }
+<span class="fc" id="L202">        }</span>
+<span class="pc bpc" id="L203" title="1 of 2 branches missed.">        if (closest != null) {</span>
+<span class="fc" id="L204">            events.add(String.format(Locale.US,</span>
+                    &quot;Periapsis lunar aproximado: %.0f km a T+%.0f s&quot;,
+<span class="fc" id="L206">                    closest.getDistanceMoon(),</span>
+<span class="fc" id="L207">                    closest.getElapsedTime()));</span>
+        }
+<span class="fc" id="L209">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

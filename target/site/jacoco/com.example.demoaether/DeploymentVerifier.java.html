@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="es"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DeploymentVerifier.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">AETHER Mission Control Simulator</a> &gt; <a href="index.source.html" class="el_package">com.example.demoaether</a> &gt; <span class="el_source">DeploymentVerifier.java</span></div><h1>DeploymentVerifier.java</h1><pre class="source lang-java linenums">package com.example.demoaether;
+
+import java.net.URL;
+
+/**
+ * Verificacion automatica del paquete de despliegue.
+ *
+ * Quien llama:
+ * - Launcher.main() cuando recibe --verificar-despliegue.
+ *
+ * A quien llama:
+ * - OrekitInitializer para comprobar el ZIP de datos.
+ * - ClassLoader para comprobar JavaFX, MySQL, FXML y CSS dentro del JAR.
+ *
+ * Que hace:
+ * - Falla con un mensaje claro si falta una pieza indispensable del paquete.
+ * - Termina con codigo 0 e imprime DESPLIEGUE AETHER: OK cuando todo esta disponible.
+ */
+public final class DeploymentVerifier {
+
+    private DeploymentVerifier() {
+        // Clase utilitaria: no necesita instancias.
+    }
+
+    /** Ejecuta las comprobaciones que no necesitan mostrar la interfaz grafica. */
+    public static void verify() {
+        try {
+            // Confirma que las clases de las dependencias fueron incluidas en el JAR ejecutable.
+<span class="nc" id="L29">            Class.forName(&quot;javafx.application.Application&quot;);</span>
+<span class="nc" id="L30">            Class.forName(&quot;com.mysql.cj.jdbc.Driver&quot;);</span>
+
+<span class="nc" id="L32">            requireResource(&quot;/com/example/demoaether/hello-view.fxml&quot;);</span>
+<span class="nc" id="L33">            requireResource(&quot;/com/example/demoaether/aether.css&quot;);</span>
+
+            // Reproduce una primera instalacion, donde MySQL aun no tiene configuracion guardada.
+<span class="nc" id="L36">            MissionConfig initialConfig = MissionPresets.migrateLegacyArtemisII(null);</span>
+<span class="nc" id="L37">            initialConfig.validate();</span>
+
+            // Inicializa Orekit para comprobar que orekit-data.zip es legible y contiene UTC.
+<span class="nc" id="L40">            OrekitInitializer.initialize();</span>
+
+<span class="nc" id="L42">            System.out.println(&quot;DESPLIEGUE AETHER: OK&quot;);</span>
+<span class="nc" id="L43">            System.out.println(&quot;JAR, JavaFX, MySQL, configuracion inicial, FXML, CSS y datos Orekit disponibles.&quot;);</span>
+<span class="nc" id="L44">        } catch (Exception error) {</span>
+<span class="nc" id="L45">            throw new IllegalStateException(&quot;DESPLIEGUE AETHER: ERROR - &quot; + error.getMessage(), error);</span>
+<span class="nc" id="L46">        }</span>
+<span class="nc" id="L47">    }</span>
+
+    private static void requireResource(String resourcePath) {
+<span class="nc" id="L50">        URL resource = DeploymentVerifier.class.getResource(resourcePath);</span>
+<span class="nc bnc" id="L51" title="All 2 branches missed.">        if (resource == null) {</span>
+<span class="nc" id="L52">            throw new IllegalStateException(&quot;Falta el recurso &quot; + resourcePath + &quot; dentro del JAR.&quot;);</span>
+        }
+<span class="nc" id="L54">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>
