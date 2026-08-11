@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="es"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MissionTrajectory.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">AETHER Mission Control Simulator</a> &gt; <a href="index.source.html" class="el_package">com.example.demoaether</a> &gt; <span class="el_source">MissionTrajectory.java</span></div><h1>MissionTrajectory.java</h1><pre class="source lang-java linenums">package com.example.demoaether;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+/**
+ * Resultado precalculado de una simulacion orbital.
+ *
+ * Quien lo crea:
+ * - OrekitTrajectoryPlanner calcula la lista de puntos usando Orekit.
+ *
+ * Quien lo consume:
+ * - TrajectoryPlayback interpola estos estados en el hilo JavaFX.
+ * - HelloController recibe cada MissionState y actualiza la interfaz.
+ */
+public class MissionTrajectory {
+
+    private final List&lt;MissionState&gt; states;
+    private final List&lt;String&gt; events;
+    private final boolean orekitBacked;
+
+<span class="fc" id="L23">    public MissionTrajectory(List&lt;MissionState&gt; states, List&lt;String&gt; events, boolean orekitBacked) {</span>
+        // Copias inmutables: MissionSimulator puede leer la trayectoria sin que otra clase la modifique.
+<span class="fc" id="L25">        this.states = Collections.unmodifiableList(new ArrayList&lt;&gt;(states));</span>
+<span class="fc" id="L26">        this.events = Collections.unmodifiableList(new ArrayList&lt;&gt;(events));</span>
+<span class="fc" id="L27">        this.orekitBacked = orekitBacked;</span>
+<span class="fc" id="L28">    }</span>
+
+    public List&lt;MissionState&gt; getStates() {
+<span class="fc" id="L31">        return states;</span>
+    }
+
+    public List&lt;String&gt; getEvents() {
+<span class="fc" id="L35">        return events;</span>
+    }
+
+    public boolean isOrekitBacked() {
+<span class="fc" id="L39">        return orekitBacked;</span>
+    }
+
+    public MissionState lastState() {
+        // Acceso rapido al resultado final usado por reportes o guardado de cierre.
+<span class="pc bpc" id="L44" title="1 of 2 branches missed.">        return states.isEmpty() ? null : states.get(states.size() - 1);</span>
+    }
+
+    /** Devuelve el tiempo de mision del ultimo estado, no la duracion de pared. */
+    public double getDurationSeconds() {
+<span class="fc" id="L49">        MissionState last = lastState();</span>
+<span class="pc bpc" id="L50" title="1 of 2 branches missed.">        return last == null ? 0.0 : last.getElapsedTime();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

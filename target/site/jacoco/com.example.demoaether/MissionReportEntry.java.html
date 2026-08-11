@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="es"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MissionReportEntry.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">AETHER Mission Control Simulator</a> &gt; <a href="index.source.html" class="el_package">com.example.demoaether</a> &gt; <span class="el_source">MissionReportEntry.java</span></div><h1>MissionReportEntry.java</h1><pre class="source lang-java linenums">package com.example.demoaether;
+
+import java.time.LocalDateTime;
+
+/**
+ * Fila de reporte guardado.
+ *
+ * Quien la crea:
+ * - MySqlAetherRepository al leer mission_reports.
+ * - PendingDatabaseRepository cuando MySQL no esta disponible.
+ *
+ * Quien la usa:
+ * - HelloController.showSavedReports() para listar y abrir PDFs generados.
+ */
+public class MissionReportEntry {
+
+    private final long id;
+    private final String fileName;
+    private final String filePath;
+    private final String missionName;
+    private final LocalDateTime generatedAt;
+
+<span class="nc" id="L23">    public MissionReportEntry(long id, String fileName, String filePath, String missionName, LocalDateTime generatedAt) {</span>
+        // Guarda referencia al PDF fisico para poder abrirlo desde la interfaz.
+<span class="nc" id="L25">        this.id = id;</span>
+<span class="nc" id="L26">        this.fileName = fileName;</span>
+<span class="nc" id="L27">        this.filePath = filePath;</span>
+<span class="nc" id="L28">        this.missionName = missionName;</span>
+<span class="nc" id="L29">        this.generatedAt = generatedAt;</span>
+<span class="nc" id="L30">    }</span>
+
+    public long getId() {
+<span class="nc" id="L33">        return id;</span>
+    }
+
+    public String getFileName() {
+<span class="nc" id="L37">        return fileName;</span>
+    }
+
+    public String getFilePath() {
+<span class="nc" id="L41">        return filePath;</span>
+    }
+
+    public String getMissionName() {
+<span class="nc" id="L45">        return missionName;</span>
+    }
+
+    public LocalDateTime getGeneratedAt() {
+<span class="nc" id="L49">        return generatedAt;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

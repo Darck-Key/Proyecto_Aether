@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="es"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>OrbitFactory.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">AETHER Mission Control Simulator</a> &gt; <a href="index.source.html" class="el_package">com.example.demoaether</a> &gt; <span class="el_source">OrbitFactory.java</span></div><h1>OrbitFactory.java</h1><pre class="source lang-java linenums">package com.example.demoaether;
+
+import org.orekit.frames.Frame;
+import org.orekit.frames.FramesFactory;
+import org.orekit.orbits.KeplerianOrbit;
+import org.orekit.orbits.Orbit;
+import org.orekit.orbits.PositionAngleType;
+import org.orekit.time.AbsoluteDate;
+import org.orekit.time.TimeScalesFactory;
+import org.orekit.utils.Constants;
+
+/**
+ * Fabrica de orbitas iniciales para Orekit.
+ *
+ * Quien llama:
+ * - OrekitTrajectoryPlanner.precompute().
+ *
+ * Que hace:
+ * - Valida MissionConfig.
+ * - Convierte kilometros/grados de la UI a metros/radianes para Orekit.
+ * - Crea una KeplerianOrbit en el frame EME2000.
+ */
+<span class="nc" id="L23">public class OrbitFactory {</span>
+
+    /**
+     * Crea la orbita inicial de estacionamiento en EME2000.
+     *
+     * @param config parametros capturados en Opciones
+     * @return orbita Kepleriana inicial para Orekit
+     */
+    public static Orbit createInitialOrbit(MissionConfig config) {
+        // Punto unico donde los parametros de la interfaz se transforman en orbita inicial Orekit.
+<span class="fc" id="L33">        config.validate();</span>
+
+<span class="fc" id="L35">        Frame frame = FramesFactory.getEME2000();</span>
+<span class="fc" id="L36">        AbsoluteDate date = new AbsoluteDate(2026, 7, 20, 12, 0, 0, TimeScalesFactory.getUTC());</span>
+<span class="fc" id="L37">        double earthRadius = Constants.WGS84_EARTH_EQUATORIAL_RADIUS;</span>
+<span class="fc" id="L38">        double perigee = earthRadius + (config.getInitialAltitude() * 1000);</span>
+<span class="fc" id="L39">        double eccentricity = config.getEccentricity();</span>
+<span class="fc" id="L40">        double semiMajorAxis = perigee / (1.0 - eccentricity);</span>
+<span class="fc" id="L41">        double inclination = Math.toRadians(config.getInclination());</span>
+<span class="fc" id="L42">        double argumentOfPerigee = Math.toRadians(config.getArgumentOfPerigee());</span>
+<span class="fc" id="L43">        double rightAscension = 0.0;</span>
+<span class="fc" id="L44">        double trueAnomaly = 0.0;</span>
+
+<span class="fc" id="L46">        return new KeplerianOrbit(</span>
+                semiMajorAxis,
+                eccentricity,
+                inclination,
+                argumentOfPerigee,
+                rightAscension,
+                trueAnomaly,
+                PositionAngleType.TRUE,
+                frame,
+                date,
+                Constants.WGS84_EARTH_MU
+        );
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

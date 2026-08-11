@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="es"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MissionConfig.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">AETHER Mission Control Simulator</a> &gt; <a href="index.source.html" class="el_package">com.example.demoaether</a> &gt; <span class="el_source">MissionConfig.java</span></div><h1>MissionConfig.java</h1><pre class="source lang-java linenums">package com.example.demoaether;
+
+/**
+ * Configuración de la misión.
+ * Contiene los parámetros orbitales y de ejecución usados por Orekit.
+ */
+public class MissionConfig {
+
+    // Modelo central de parametros: lo llena HelloController, lo calcula OrekitTrajectoryPlanner
+    // y lo guarda MySqlAetherRepository en la tabla mission_configs.
+
+    private String missionName;
+    private String spacecraftName;
+    private double spacecraftMass;
+    private double initialAltitude;
+    private double initialVelocity;
+    private double inclination;
+    private double eccentricity;
+    private double argumentOfPerigee;
+    private double tliDeltaVKms;
+    private double tliBurnOffsetHours;
+    private int simulationHours;
+    private int simulationStepSeconds;
+    private int simulationSpeed;
+    private boolean saveReports;
+
+<span class="fc" id="L27">    public MissionConfig() {</span>
+        // Valores por defecto para que la interfaz pueda iniciar sin depender de MySQL.
+<span class="fc" id="L29">        missionName = &quot;Artemis II&quot;;</span>
+<span class="fc" id="L30">        spacecraftName = &quot;Orion&quot;;</span>
+<span class="fc" id="L31">        spacecraftMass = 26000;</span>
+<span class="fc" id="L32">        initialAltitude = 185;</span>
+<span class="fc" id="L33">        initialVelocity = 7.8;</span>
+<span class="fc" id="L34">        inclination = 28.5;</span>
+<span class="fc" id="L35">        eccentricity = 0.0;</span>
+<span class="fc" id="L36">        argumentOfPerigee = 0.0;</span>
+<span class="fc" id="L37">        tliDeltaVKms = 3.2;</span>
+<span class="fc" id="L38">        tliBurnOffsetHours = 23.5;</span>
+<span class="fc" id="L39">        simulationHours = 240;</span>
+<span class="fc" id="L40">        simulationStepSeconds = 60;</span>
+<span class="fc" id="L41">        simulationSpeed = 1000;</span>
+<span class="fc" id="L42">        saveReports = true;</span>
+<span class="fc" id="L43">    }</span>
+
+    public void validate() {
+        // Validaciones usadas antes de guardar o ejecutar para evitar parametros imposibles.
+<span class="fc bfc" id="L47" title="All 4 branches covered.">        if (initialAltitude &lt; 160 || initialAltitude &gt; 2000) {</span>
+<span class="fc" id="L48">            throw new IllegalArgumentException(&quot;La altitud inicial debe estar entre 160 y 2000 km.&quot;);</span>
+        }
+<span class="pc bpc" id="L50" title="2 of 4 branches missed.">        if (initialVelocity &lt;= 0 || initialVelocity &gt; 20) {</span>
+<span class="nc" id="L51">            throw new IllegalArgumentException(&quot;La velocidad inicial debe estar entre 0 y 20 km/s.&quot;);</span>
+        }
+<span class="pc bpc" id="L53" title="2 of 4 branches missed.">        if (inclination &lt; 0 || inclination &gt; 180) {</span>
+<span class="nc" id="L54">            throw new IllegalArgumentException(&quot;La inclinación debe estar entre 0 y 180 grados.&quot;);</span>
+        }
+<span class="pc bpc" id="L56" title="2 of 4 branches missed.">        if (eccentricity &lt; 0 || eccentricity &gt;= 1) {</span>
+<span class="nc" id="L57">            throw new IllegalArgumentException(&quot;La excentricidad debe ser mayor o igual a 0 y menor que 1.&quot;);</span>
+        }
+<span class="pc bpc" id="L59" title="2 of 4 branches missed.">        if (argumentOfPerigee &lt; 0 || argumentOfPerigee &gt;= 360) {</span>
+<span class="nc" id="L60">            throw new IllegalArgumentException(&quot;El argumento del perigeo debe estar entre 0 y 360 grados.&quot;);</span>
+        }
+<span class="pc bpc" id="L62" title="2 of 4 branches missed.">        if (simulationHours &lt;= 0 || simulationHours &gt; 240) {</span>
+<span class="nc" id="L63">            throw new IllegalArgumentException(&quot;La duración simulada debe estar entre 1 y 240 horas.&quot;);</span>
+        }
+<span class="pc bpc" id="L65" title="1 of 2 branches missed.">        if (simulationStepSeconds &lt;= 0) {</span>
+<span class="nc" id="L66">            throw new IllegalArgumentException(&quot;El paso de simulación debe ser mayor que cero.&quot;);</span>
+        }
+<span class="fc bfc" id="L68" title="All 4 branches covered.">        if (tliDeltaVKms &lt; 0 || tliDeltaVKms &gt; 5) {</span>
+<span class="fc" id="L69">            throw new IllegalArgumentException(&quot;El delta-v TLI debe estar entre 0 y 5 km/s.&quot;);</span>
+        }
+<span class="pc bpc" id="L71" title="2 of 4 branches missed.">        if (tliBurnOffsetHours &lt; 0 || tliBurnOffsetHours &gt; simulationHours) {</span>
+<span class="nc" id="L72">            throw new IllegalArgumentException(&quot;La epoca TLI debe estar dentro de la duracion simulada.&quot;);</span>
+        }
+<span class="pc bpc" id="L74" title="2 of 4 branches missed.">        if (simulationSpeed &lt; 1 || simulationSpeed &gt; 1000) {</span>
+<span class="nc" id="L75">            throw new IllegalArgumentException(&quot;La escala de tiempo debe estar entre 1x y 1000x.&quot;);</span>
+        }
+<span class="fc" id="L77">    }</span>
+
+<span class="fc" id="L79">    public String getMissionName() { return missionName; }</span>
+<span class="fc" id="L80">    public void setMissionName(String missionName) { this.missionName = missionName; }</span>
+<span class="fc" id="L81">    public String getSpacecraftName() { return spacecraftName; }</span>
+<span class="fc" id="L82">    public void setSpacecraftName(String spacecraftName) { this.spacecraftName = spacecraftName; }</span>
+<span class="fc" id="L83">    public double getSpacecraftMass() { return spacecraftMass; }</span>
+<span class="fc" id="L84">    public void setSpacecraftMass(double spacecraftMass) { this.spacecraftMass = spacecraftMass; }</span>
+<span class="fc" id="L85">    public double getInitialAltitude() { return initialAltitude; }</span>
+<span class="fc" id="L86">    public void setInitialAltitude(double initialAltitude) { this.initialAltitude = initialAltitude; }</span>
+<span class="fc" id="L87">    public double getInitialVelocity() { return initialVelocity; }</span>
+<span class="fc" id="L88">    public void setInitialVelocity(double initialVelocity) { this.initialVelocity = initialVelocity; }</span>
+<span class="fc" id="L89">    public double getInclination() { return inclination; }</span>
+<span class="nc" id="L90">    public void setInclination(double inclination) { this.inclination = inclination; }</span>
+<span class="fc" id="L91">    public double getEccentricity() { return eccentricity; }</span>
+<span class="nc" id="L92">    public void setEccentricity(double eccentricity) { this.eccentricity = eccentricity; }</span>
+<span class="fc" id="L93">    public double getArgumentOfPerigee() { return argumentOfPerigee; }</span>
+<span class="nc" id="L94">    public void setArgumentOfPerigee(double argumentOfPerigee) { this.argumentOfPerigee = argumentOfPerigee; }</span>
+<span class="fc" id="L95">    public double getTliDeltaVKms() { return tliDeltaVKms; }</span>
+<span class="fc" id="L96">    public void setTliDeltaVKms(double tliDeltaVKms) { this.tliDeltaVKms = tliDeltaVKms; }</span>
+<span class="fc" id="L97">    public double getTliBurnOffsetHours() { return tliBurnOffsetHours; }</span>
+<span class="fc" id="L98">    public void setTliBurnOffsetHours(double tliBurnOffsetHours) { this.tliBurnOffsetHours = tliBurnOffsetHours; }</span>
+<span class="fc" id="L99">    public int getSimulationHours() { return simulationHours; }</span>
+<span class="fc" id="L100">    public void setSimulationHours(int simulationHours) { this.simulationHours = simulationHours; }</span>
+<span class="nc" id="L101">    public int getSimulationStepSeconds() { return simulationStepSeconds; }</span>
+<span class="fc" id="L102">    public void setSimulationStepSeconds(int simulationStepSeconds) { this.simulationStepSeconds = simulationStepSeconds; }</span>
+<span class="fc" id="L103">    public int getSimulationSpeed() { return simulationSpeed; }</span>
+<span class="fc" id="L104">    public void setSimulationSpeed(int simulationSpeed) { this.simulationSpeed = simulationSpeed; }</span>
+<span class="nc" id="L105">    public boolean isSaveReports() { return saveReports; }</span>
+<span class="fc" id="L106">    public void setSaveReports(boolean saveReports) { this.saveReports = saveReports; }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>
