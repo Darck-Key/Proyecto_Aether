@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="es"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CalculationHistoryEntry.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">AETHER Mission Control Simulator</a> &gt; <a href="index.source.html" class="el_package">com.example.demoaether</a> &gt; <span class="el_source">CalculationHistoryEntry.java</span></div><h1>CalculationHistoryEntry.java</h1><pre class="source lang-java linenums">package com.example.demoaether;
+
+import java.time.LocalDateTime;
+
+/**
+ * Fila de historial orbital.
+ *
+ * Quien la crea:
+ * - MySqlAetherRepository al leer orbital_calculations.
+ * - PendingDatabaseRepository cuando MySQL no esta disponible.
+ *
+ * Quien la usa:
+ * - HelloController.createHistoryTable().
+ * - ReportGenerator para incluir historial reciente en PDF.
+ */
+public class CalculationHistoryEntry {
+
+    private final long id;
+    private final String missionName;
+    private final String spacecraftName;
+    private final double elapsedSeconds;
+    private final double velocityKms;
+    private final double altitudeKm;
+    private final double distanceMoonKm;
+    private final LocalDateTime executedAt;
+
+    public CalculationHistoryEntry(long id, String missionName, String spacecraftName, double elapsedSeconds,
+                                   double velocityKms, double altitudeKm, double distanceMoonKm,
+<span class="fc" id="L29">                                   LocalDateTime executedAt) {</span>
+        // Representa una fila ya lista para tablas y reportes.
+<span class="fc" id="L31">        this.id = id;</span>
+<span class="fc" id="L32">        this.missionName = missionName;</span>
+<span class="fc" id="L33">        this.spacecraftName = spacecraftName;</span>
+<span class="fc" id="L34">        this.elapsedSeconds = elapsedSeconds;</span>
+<span class="fc" id="L35">        this.velocityKms = velocityKms;</span>
+<span class="fc" id="L36">        this.altitudeKm = altitudeKm;</span>
+<span class="fc" id="L37">        this.distanceMoonKm = distanceMoonKm;</span>
+<span class="fc" id="L38">        this.executedAt = executedAt;</span>
+<span class="fc" id="L39">    }</span>
+
+    public long getId() {
+<span class="nc" id="L42">        return id;</span>
+    }
+
+    public String getMissionName() {
+<span class="fc" id="L46">        return missionName;</span>
+    }
+
+    public String getSpacecraftName() {
+<span class="nc" id="L50">        return spacecraftName;</span>
+    }
+
+    public double getElapsedSeconds() {
+<span class="nc" id="L54">        return elapsedSeconds;</span>
+    }
+
+    public double getVelocityKms() {
+<span class="fc" id="L58">        return velocityKms;</span>
+    }
+
+    public double getAltitudeKm() {
+<span class="fc" id="L62">        return altitudeKm;</span>
+    }
+
+    public double getDistanceMoonKm() {
+<span class="fc" id="L66">        return distanceMoonKm;</span>
+    }
+
+    public LocalDateTime getExecutedAt() {
+<span class="fc" id="L70">        return executedAt;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>
